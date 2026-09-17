@@ -1,2 +1,2 @@
-# projet-tp-processus-du-dev-logiciel
-Choix de sujet : Plateforme d'organisation de tournois.
+# project-tp-process-of-the-dev-software
+Subject : Tournament organization platform.
