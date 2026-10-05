@@ -1,8 +1,27 @@
-__pycache__
-app.egg-info
-*.pyc
-.mypy_cache
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.cache/
+
+# Coverage
 .coverage
-htmlcov
-.cache
-.venv
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Build
+build/
+dist/
+
+# Environment
+.env
