@@ -43,6 +43,17 @@ wheels = [
 ]
 
 [[package]]
+name = "backend"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "fastapi", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [{ name = "fastapi", extras = ["standard"], specifier = ">=0.142.2" }]
+
+[[package]]
 name = "certifi"
 version = "2026.7.22"
 source = { registry = "https://pypi.org/simple" }
@@ -546,17 +557,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/2e/21/910f085c0b83b80e4
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f4/93/2ad416d69c4ca8fd21ebc6894f23f4eda744dc6f43a14d7a9ffd7ed3abbd/opentelemetry_semantic_conventions-0.66b0-py3-none-any.whl", hash = "sha256:175b19dd98c4473f4f43a2b1df59186fd7b4a48cd3f77cbe03438b6d6fda230a", size = 206277, upload-time = "2026-09-25T12:32:26.484Z" },
 ]
-
-[[package]]
-name = "projet-tp-processus-du-dev-logiciel"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "fastapi", extra = ["standard"] },
-]
-
-[package.metadata]
-requires-dist = [{ name = "fastapi", extras = ["standard"], specifier = ">=0.142.2" }]
 
 [[package]]
 name = "protobuf"
