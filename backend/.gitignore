@@ -6,6 +6,9 @@ __pycache__/
 # Virtual environments
 .venv/
 venv/
+.bin/
+.uv*
+
 
 # Tooling caches
 .pytest_cache/
@@ -25,3 +28,8 @@ dist/
 
 # Environment
 .env
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
