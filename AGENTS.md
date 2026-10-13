@@ -61,7 +61,13 @@ BREAKING CHANGE: `start_date` is now an ISO-8601 string
 - `uv sync` — installer les dépendances
 - `uv run ruff check .` — lint
 - `uv run ruff format --check .` — vérification du format
+- `uv run mypy .` — vérification des types
 - `uv run pytest` — tests
 
 ## CI
-`.github/workflows/backend-ci.yaml` exécute lint + format + tests sur push/PR vers `main`/`dev` lorsque `backend/**` change.
+Deux workflows GitHub Actions s'exécutent sur les pull requests vers `main`/`dev` et sont bloquants (toute erreur de lint, de type ou de test échoue) :
+
+- `.github/workflows/backend-ci.yaml` — lint (ruff), format (ruff), types (mypy) et tests (pytest) lorsque `backend/**` change.
+- `.github/workflows/frontend-ci.yml` — lint (oxlint + ESLint), types (vue-tsc) et tests (vitest).
+
+Le statut est visible dans la pull request (onglet « Checks »). Le blocage effectif du merge nécessite la protection de branche (`Require status checks to pass`) sur `main` et `dev`.
