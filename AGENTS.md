@@ -65,3 +65,6 @@ BREAKING CHANGE: `start_date` is now an ISO-8601 string
 
 ## CI
 `.github/workflows/backend-ci.yaml` exécute lint + format + tests sur push/PR vers `main`/`dev` lorsque `backend/**` change.
+
+## Mettre à jour le README
+Mettre à jour le README lorsqu'il a besoin d'être mis à jour.
