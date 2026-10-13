@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1380" height="1060" viewBox="0 0 1380 1060" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1380" height="1080" viewBox="0 0 1380 1080" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif">
 <style>
   .ent-box { fill: #ffffff; stroke: #364fc7; stroke-width: 1.6; }
   .ent-head { fill: #dbe4ff; }
@@ -17,11 +17,13 @@
   .subtitle { font-size: 13px; fill: #6c757d; }
   .legend { font-size: 12.5px; fill: #495057; }
 </style>
-<rect width="1380" height="1060" fill="#ffffff"/>
+<rect width="1380" height="1080" fill="#ffffff"/>
 <text x="40" y="42" class="title">MCD — Tournament organization platform</text>
 <text x="40" y="64" class="subtitle">Schéma issu des migrations Alembic 0001 → 0002 (PostgreSQL 17) · notation Merise</text>
 <line x1="180.0" y1="217.0" x2="440" y2="217" class="link"/>
 <line x1="720.0" y1="217.0" x2="440" y2="217" class="link"/>
+<line x1="720.0" y1="217.0" x2="300" y2="372" class="link"/>
+<line x1="170.0" y1="500.0" x2="300" y2="372" class="link"/>
 <line x1="720.0" y1="217.0" x2="520" y2="500" class="link"/>
 <line x1="170.0" y1="500.0" x2="520" y2="500" class="link"/>
 <line x1="520.0" y1="760.0" x2="520" y2="500" class="link"/>
@@ -129,6 +131,9 @@
 <ellipse cx="440" cy="217" rx="54" ry="34" class="rel"/>
 <text x="440" y="221" text-anchor="middle" class="rel-name">DÉTENIR</text>
 <text x="440" y="265" text-anchor="middle" class="rel-hint">FK refresh_tokens.user_id</text>
+<ellipse cx="300" cy="372" rx="50" ry="34" class="rel"/>
+<text x="300" y="376" text-anchor="middle" class="rel-name">AVOIR</text>
+<text x="238" y="376" text-anchor="end" class="rel-hint">FK users.role_id</text>
 <ellipse cx="520" cy="500" rx="80" ry="34" class="rel"/>
 <text x="520" y="497" text-anchor="middle" class="rel-name">APPARTENIR</text>
 <line x1="452" y1="503" x2="588" y2="503" stroke="#d9480f" stroke-width="0.8"/>
@@ -144,6 +149,8 @@
 <text x="835" y="810" text-anchor="middle" class="rel-hint">FK tournaments.association_id</text>
 <text x="340.0" y="208.0" text-anchor="middle" class="card">1,1</text>
 <text x="540.0" y="234.0" text-anchor="middle" class="card">0,n</text>
+<text x="545.7" y="299.2" text-anchor="middle" class="card">1,1</text>
+<text x="237.1" y="419.7" text-anchor="middle" class="card">0,n</text>
 <text x="629.3" y="371.8" text-anchor="middle" class="card">0,n</text>
 <text x="320.0" y="491.0" text-anchor="middle" class="card">0,n</text>
 <text x="507.0" y="661.0" text-anchor="middle" class="card">0,n</text>
@@ -154,8 +161,9 @@
 <line x1="40" y1="917" x2="1340" y2="917" stroke="#dee2e6"/>
 <text x="40" y="945" class="legend" xml:space="preserve">Légende : attribut souligné = identifiant (clé primaire) · UQ = unique · NULL = facultatif · = 'draft' = valeur par défaut · gris = type PostgreSQL</text>
 <text x="40" y="965" class="legend" xml:space="preserve">DÉTENIR : un utilisateur détient 0..n refresh tokens ; un token appartient à 1 seul utilisateur (ON DELETE CASCADE).</text>
-<text x="40" y="985" class="legend" xml:space="preserve">APPARTENIR (ternaire) : un utilisateur est membre de 0..n associations avec un rôle dans chacune ; CIF (utilisateur, association) → rôle : un seul rôle par association.</text>
-<text x="40" y="1005" class="legend" xml:space="preserve">                Suppression d'un utilisateur ou d'une association → CASCADE ; un rôle encore attribué ne peut pas être supprimé (RESTRICT).</text>
-<text x="40" y="1025" class="legend" xml:space="preserve">PARTICIPER : un utilisateur participe à 0..n tournois ; un tournoi a 0..n participants (ON DELETE CASCADE des deux côtés).</text>
-<text x="40" y="1045" class="legend" xml:space="preserve">ORGANISER : une association organise 0..n tournois ; un tournoi est organisé par 1 seule association (ON DELETE CASCADE).</text>
+<text x="40" y="985" class="legend" xml:space="preserve">AVOIR : tout utilisateur a exactement 1 rôle global (« participant » par défaut, créé par la migration) ; un rôle est le rôle global de 0..n utilisateurs (RESTRICT).</text>
+<text x="40" y="1005" class="legend" xml:space="preserve">APPARTENIR (ternaire) : un utilisateur est membre de 0..n associations avec un rôle dans chacune ; CIF (utilisateur, association) → rôle : un seul rôle par association.</text>
+<text x="40" y="1025" class="legend" xml:space="preserve">                Suppression d'un utilisateur ou d'une association → CASCADE ; un rôle encore attribué ne peut pas être supprimé (RESTRICT).</text>
+<text x="40" y="1045" class="legend" xml:space="preserve">PARTICIPER : un utilisateur participe à 0..n tournois ; un tournoi a 0..n participants (ON DELETE CASCADE des deux côtés).</text>
+<text x="40" y="1065" class="legend" xml:space="preserve">ORGANISER : une association organise 0..n tournois ; un tournoi est organisé par 1 seule association (ON DELETE CASCADE).</text>
 </svg>

@@ -29,7 +29,7 @@ Le schéma est défini **uniquement par les migrations versionnées [Alembic](ht
 | Révision | Contenu |
 |---|---|
 | `0001_initial_schema` | `users`, `refresh_tokens` |
-| `0002_associations_roles_tournaments` | `associations`, `roles`, `memberships` (utilisateur ↔ association avec un rôle), `tournaments`, `tournament_participants` (utilisateur ↔ tournoi) |
+| `0002_associations_roles_tournaments` | `associations`, `roles` (+ rôle par défaut `participant` et `users.role_id`), `memberships` (utilisateur ↔ association avec un rôle), `tournaments`, `tournament_participants` (utilisateur ↔ tournoi) |
 
 ![MCD du schéma](../docs/mcd.svg)
 
