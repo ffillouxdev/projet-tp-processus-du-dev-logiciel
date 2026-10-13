@@ -1,1 +1,115 @@
 @import 'tailwindcss';
+
+@theme {
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-active: #1e40af;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #e2e8f0;
+  --color-secondary-hover: #cbd5e1;
+  --color-secondary-active: #94a3b8;
+  --color-secondary-foreground: #0f172a;
+
+  --color-ghost: transparent;
+  --color-ghost-hover: #f1f5f9;
+  --color-ghost-active: #e2e8f0;
+  --color-ghost-foreground: #0f172a;
+
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-danger-active: #991b1b;
+  --color-danger-foreground: #ffffff;
+
+  --color-btn-group-divider: #cbd5e1;
+
+  --color-input-bg: #ffffff;
+  --color-input-border: #cbd5e1;
+  --color-input-border-hover: #94a3b8;
+  --color-input-focus: #2563eb;
+  --color-input-text: #0f172a;
+  --color-input-placeholder: #94a3b8;
+
+  /* Dialog system */
+  --color-dialog-bg: #ffffff;
+  --color-dialog-border: #e2e8f0;
+  --color-dialog-overlay: rgba(0, 0, 0, 0.5);
+  --color-dialog-text: #0f172a;
+  --color-dialog-muted: #64748b;
+}
+
+@layer base {
+  :root {
+    --color-primary: #2563eb;
+    --color-primary-hover: #1d4ed8;
+    --color-primary-active: #1e40af;
+    --color-primary-foreground: #ffffff;
+
+    --color-secondary: #e2e8f0;
+    --color-secondary-hover: #cbd5e1;
+    --color-secondary-active: #94a3b8;
+    --color-secondary-foreground: #0f172a;
+
+    --color-ghost: transparent;
+    --color-ghost-hover: #f1f5f9;
+    --color-ghost-active: #e2e8f0;
+    --color-ghost-foreground: #0f172a;
+
+    --color-danger: #dc2626;
+    --color-danger-hover: #b91c1c;
+    --color-danger-active: #991b1b;
+    --color-danger-foreground: #ffffff;
+
+    --color-btn-group-divider: #cbd5e1;
+
+    --color-input-bg: #ffffff;
+    --color-input-border: #cbd5e1;
+    --color-input-border-hover: #94a3b8;
+    --color-input-focus: #2563eb;
+    --color-input-text: #0f172a;
+    --color-input-placeholder: #94a3b8;
+
+    --color-dialog-bg: #ffffff;
+    --color-dialog-border: #e2e8f0;
+    --color-dialog-overlay: rgba(0, 0, 0, 0.5);
+    --color-dialog-text: #0f172a;
+    --color-dialog-muted: #64748b;
+  }
+
+  .dark {
+    --color-primary: #3b82f6;
+    --color-primary-hover: #2563eb;
+    --color-primary-active: #1d4ed8;
+    --color-primary-foreground: #ffffff;
+
+    --color-secondary: #334155;
+    --color-secondary-hover: #475569;
+    --color-secondary-active: #64748b;
+    --color-secondary-foreground: #f8fafc;
+
+    --color-ghost: transparent;
+    --color-ghost-hover: #1e293b;
+    --color-ghost-active: #334155;
+    --color-ghost-foreground: #f8fafc;
+
+    --color-danger: #ef4444;
+    --color-danger-hover: #dc2626;
+    --color-danger-active: #b91c1c;
+    --color-danger-foreground: #ffffff;
+
+    --color-btn-group-divider: #475569;
+
+    --color-input-bg: #1e293b;
+    --color-input-border: #334155;
+    --color-input-border-hover: #475569;
+    --color-input-focus: #3b82f6;
+    --color-input-text: #f8fafc;
+    --color-input-placeholder: #64748b;
+
+    --color-dialog-bg: #1e293b;
+    --color-dialog-border: #334155;
+    --color-dialog-overlay: rgba(0, 0, 0, 0.7);
+    --color-dialog-text: #f8fafc;
+    --color-dialog-muted: #94a3b8;
+  }
+}
