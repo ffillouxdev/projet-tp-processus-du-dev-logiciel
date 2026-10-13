@@ -24,3 +24,12 @@ uv run fastapi dev main.py
 cd backend
 uv run pytest
 ```
+
+## Santé de l'API
+
+`GET /health` retourne l'état de l'API et de ses dépendances critiques, sans authentification.
+
+- `200` — `{"status": "ok", "dependencies": {}}` : API et dépendances disponibles
+- `503` — `{"status": "unhealthy", "dependencies": {"...": "unavailable"}}` : au moins une dépendance critique indisponible
+
+Pour vérifier une dépendance critique, enrichir `check_dependencies()` dans `backend/main.py`.
