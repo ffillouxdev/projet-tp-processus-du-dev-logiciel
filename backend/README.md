@@ -21,35 +21,73 @@ L'API implémente un système d'authentification complet et sécurisé respectan
 
 ---
 
-## 🗄️ Base de données (PostgreSQL & SQLite)
+## 🗄️ Base de données (PostgreSQL + Alembic)
 
-L'ORM utilisé est **SQLAlchemy 2.0** avec le driver PostgreSQL moderne **`psycopg` (v3)**.
+L'ORM utilisé est **SQLAlchemy 2** avec le driver **`psycopg` (v3)**. **PostgreSQL 17 est le seul moteur**, en développement, en test et en CI (SQLite n'est plus utilisé).
+Le schéma est défini **uniquement par les migrations versionnées [Alembic](https://alembic.sqlalchemy.org/)** situées dans `migrations/versions/` :
 
-- **Développement local rapide** : Par défaut, l'application utilise SQLite (`sqlite:///./tournament.db`), sans configuration externe requise.
-- **PostgreSQL** : Définissez simplement la variable d'environnement `DATABASE_URL` :
-  ```env
-  DATABASE_URL=postgresql+psycopg://utilisateur:motdepasse@localhost:5432/nom_bdd
-  ```
-- **Tests** : Les tests unitaires et d'intégration s'exécutent sur une base SQLite en mémoire (`sqlite:///:memory:`) totalement isolée.
+| Révision | Contenu |
+|---|---|
+| `0001_initial_schema` | `users`, `refresh_tokens` |
+| `0002_roles_associations_tournaments` | `roles`, `user_roles` (liaison users ↔ roles), `associations`, `tournaments` |
 
----
+### Prérequis
 
-## ⚙️ Configuration
+- [Docker](https://docs.docker.com/get-docker/) avec Docker Compose (base locale **et** tests)
+- [uv](https://docs.astral.sh/uv/)
 
-Copiez `.env.example` vers `.env` et adaptez les valeurs :
+### Démarrer la base
+
+Le service `db` (`postgres:17-alpine`) est défini dans `compose.yaml` à la racine du dépôt. Les identifiants sont lus depuis le `.env` racine (valeurs par défaut : `postgres` / `postgres` / `tournament_db`, port `5432`) :
 
 ```bash
-cp .env.example .env
+cp ../.env.example ../.env   # optionnel : adapter les identifiants
+cp .env.example .env         # DATABASE_URL doit correspondre aux identifiants ci-dessus
+make db-up                   # docker compose -f ../compose.yaml up -d --wait db
 ```
 
-| Variable | Description | Défaut |
-|---|---|---|
-| `SECRET_KEY` | Clé secrète pour signer les jetons JWT | *Chaîne 64+ octets sécurisée* |
-| `ALGORITHM` | Algorithme de signature JWT | `HS256` |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Durée de validité de l'access token | `15` |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | Durée de validité du refresh token | `7` |
-| `DATABASE_URL` | Chaîne de connexion à la base de données | `sqlite:///./tournament.db` |
-| `CORS_ORIGINS` | Origines autorisées (frontend Vue.js) | `["http://localhost:3000","http://localhost:5173"]` |
+### Créer / réinitialiser la base
+
+```bash
+make db-init    # applique toutes les migrations (crée le schéma sur une base vide)
+make db-reset   # ⚠️ supprime toutes les tables et données puis réapplique les migrations
+make db-down    # arrête PostgreSQL (les données restent dans le volume pgdata)
+```
+
+Sans `make` : `uv run python -m app.db init|reset`, ou directement `uv run alembic upgrade head` / `uv run alembic downgrade base`.
+
+Au démarrage de l'API (`fastapi dev`), les migrations en attente sont **appliquées automatiquement** (`alembic upgrade head`), sauf si `ENVIRONMENT=test`.
+
+Pour repartir d'un volume totalement vierge : `docker compose -f ../compose.yaml down -v && make db-init`.
+
+### Créer une nouvelle migration
+
+1. Modifier/ajouter le modèle dans `app/models/` (et l'exporter dans `app/models/__init__.py`).
+2. Base à jour : `make db-init`.
+3. Générer la révision :
+   ```bash
+   uv run alembic revision --autogenerate --rev-id 0003 -m "add matches table"
+   ```
+   Le fichier `migrations/versions/0003_add_matches_table.py` est formaté automatiquement par ruff.
+4. **Relire la révision** : l'autogenerate ne détecte pas tout (renommages, contraintes `CHECK`, données). Vérifier que `downgrade()` annule exactement `upgrade()`.
+5. Tester l'aller-retour puis l'absence d'écart modèles ↔ migrations :
+   ```bash
+   uv run alembic upgrade head && uv run alembic downgrade -1 && uv run alembic upgrade head
+   uv run alembic check
+   ```
+6. Commiter le modèle **et** la révision ensemble. Ne jamais modifier une révision déjà mergée : en créer une nouvelle.
+
+Autres commandes utiles : `uv run alembic current`, `uv run alembic history`, `uv run alembic upgrade head --sql` (SQL sans exécution).
+
+### Tests
+
+Les tests s'exécutent sur un **vrai PostgreSQL** : un conteneur éphémère `postgres:17-alpine` est démarré pour la session par [testcontainers](https://testcontainers-python.readthedocs.io/) (**Docker requis**), et son schéma est créé par `alembic upgrade head` — les migrations sont donc testées à chaque exécution. Chaque test tourne dans une transaction annulée à la fin (isolation complète).
+
+Pour utiliser une base existante plutôt qu'un conteneur, définir `TEST_DATABASE_URL` (base **dédiée** aux tests) :
+
+```bash
+TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/tournament_test uv run pytest
+```
 
 ---
 
@@ -61,6 +99,9 @@ cp .env.example .env
 # Installation des dépendances
 uv sync
 
+# Démarrer PostgreSQL et appliquer les migrations
+make db-init
+
 # Lancer le serveur de développement avec Swagger UI
 uv run fastapi dev main.py
 # ou
@@ -70,7 +111,7 @@ uv run uvicorn main:app --reload
 uv run ruff check .
 uv run ruff format --check .
 
-# Exécuter l'ensemble des tests
+# Exécuter l'ensemble des tests (Docker requis)
 uv run pytest
 ```
 
