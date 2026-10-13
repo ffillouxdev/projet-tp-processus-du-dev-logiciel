@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 if TYPE_CHECKING:
+    from app.models.role import Role
     from app.models.token import RefreshToken
 
 
@@ -36,4 +37,11 @@ class User(Base):
         "RefreshToken",
         back_populates="user",
         cascade="all, delete-orphan",
+    )
+
+    roles: Mapped[list[Role]] = relationship(
+        "Role",
+        secondary="user_roles",
+        back_populates="users",
+        passive_deletes=True,
     )
