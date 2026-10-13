@@ -31,6 +31,8 @@ Le schéma est défini **uniquement par les migrations versionnées [Alembic](ht
 | `0001_initial_schema` | `users`, `refresh_tokens` |
 | `0002_roles_associations_tournaments` | `roles`, `user_roles` (liaison users ↔ roles), `associations`, `tournaments` |
 
+![MCD du schéma](../docs/mcd.svg)
+
 ### Prérequis
 
 - [Docker](https://docs.docker.com/get-docker/) avec Docker Compose (base locale **et** tests)

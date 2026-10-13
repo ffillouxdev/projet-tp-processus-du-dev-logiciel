@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif">
+<style>
+  .ent-box { fill: #ffffff; stroke: #364fc7; stroke-width: 1.6; }
+  .ent-head { fill: #dbe4ff; }
+  .ent-name { font-size: 15px; font-weight: 700; fill: #1c2c6b; }
+  .ent-table { font-size: 11.5px; fill: #4c5a8a; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .attr { font-size: 13px; fill: #212529; }
+  .attr-id { font-size: 13px; fill: #212529; font-weight: 700; text-decoration: underline; }
+  .type { font-size: 11.5px; fill: #6c757d; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .rel { fill: #fff4e6; stroke: #d9480f; stroke-width: 1.6; }
+  .rel-name { font-size: 13px; font-weight: 700; fill: #8a2c0a; }
+  .rel-hint { font-size: 10px; fill: #a0522d; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .link { stroke: #495057; stroke-width: 1.4; }
+  .card { font-size: 13px; font-weight: 700; fill: #0b7285; }
+  .title { font-size: 22px; font-weight: 700; fill: #212529; }
+  .subtitle { font-size: 13px; fill: #6c757d; }
+  .legend { font-size: 12.5px; fill: #495057; }
+</style>
+<rect width="1280" height="820" fill="#ffffff"/>
+<text x="30" y="42" class="title">MCD — Tournament organization platform</text>
+<text x="30" y="64" class="subtitle">Schéma issu des migrations Alembic 0001 → 0002 (PostgreSQL 17) · notation Merise</text>
+<g id="refresh_tokens">
+<rect x="20" y="132.0" width="280" height="166" rx="6" class="ent-box"/>
+<path d="M20.8 172.0 V138.0 a5.2 5.2 0 0 1 5.2 -5.2 H294 a5.2 5.2 0 0 1 5.2 5.2 V172.0 Z" class="ent-head"/>
+<line x1="20" y1="172.0" x2="300" y2="172.0" stroke="#364fc7" stroke-width="1.2"/>
+<text x="34" y="158.0" class="ent-name">REFRESH_TOKEN</text>
+<text x="286" y="158.0" text-anchor="end" class="ent-table">refresh_tokens</text>
+<text x="34" y="196.0" class="attr-id">id</text>
+<text x="286" y="196.0" text-anchor="end" class="type">INTEGER</text>
+<text x="34" y="218.0" class="attr">token_jti</text>
+<text x="286" y="218.0" text-anchor="end" class="type">VARCHAR(64) · UQ</text>
+<text x="34" y="240.0" class="attr">expires_at</text>
+<text x="286" y="240.0" text-anchor="end" class="type">TIMESTAMPTZ</text>
+<text x="34" y="262.0" class="attr">revoked</text>
+<text x="286" y="262.0" text-anchor="end" class="type">BOOLEAN</text>
+<text x="34" y="284.0" class="attr">created_at</text>
+<text x="286" y="284.0" text-anchor="end" class="type">TIMESTAMPTZ</text>
+</g>
+<g id="users">
+<rect x="490" y="88.0" width="300" height="254" rx="6" class="ent-box"/>
+<path d="M490.8 128.0 V94.0 a5.2 5.2 0 0 1 5.2 -5.2 H784 a5.2 5.2 0 0 1 5.2 5.2 V128.0 Z" class="ent-head"/>
+<line x1="490" y1="128.0" x2="790" y2="128.0" stroke="#364fc7" stroke-width="1.2"/>
+<text x="504" y="114.0" class="ent-name">UTILISATEUR</text>
+<text x="776" y="114.0" text-anchor="end" class="ent-table">users</text>
+<text x="504" y="152.0" class="attr-id">id</text>
+<text x="776" y="152.0" text-anchor="end" class="type">INTEGER</text>
+<text x="504" y="174.0" class="attr">email</text>
+<text x="776" y="174.0" text-anchor="end" class="type">VARCHAR(255) · UQ</text>
+<text x="504" y="196.0" class="attr">username</text>
+<text x="776" y="196.0" text-anchor="end" class="type">VARCHAR(50) · UQ</text>
+<text x="504" y="218.0" class="attr">hashed_password</text>
+<text x="776" y="218.0" text-anchor="end" class="type">VARCHAR(255)</text>
+<text x="504" y="240.0" class="attr">full_name</text>
+<text x="776" y="240.0" text-anchor="end" class="type">VARCHAR(100) · NULL</text>
+<text x="504" y="262.0" class="attr">is_active</text>
+<text x="776" y="262.0" text-anchor="end" class="type">BOOLEAN</text>
+<text x="504" y="284.0" class="attr">is_superuser</text>
+<text x="776" y="284.0" text-anchor="end" class="type">BOOLEAN</text>
+<text x="504" y="306.0" class="attr">created_at</text>
+<text x="776" y="306.0" text-anchor="end" class="type">TIMESTAMPTZ</text>
+<text x="504" y="328.0" class="attr">updated_at</text>
+<text x="776" y="328.0" text-anchor="end" class="type">TIMESTAMPTZ</text>
+</g>
+<g id="roles">
+<rect x="1000" y="154.0" width="250" height="122" rx="6" class="ent-box"/>
+<path d="M1000.8 194.0 V160.0 a5.2 5.2 0 0 1 5.2 -5.2 H1244 a5.2 5.2 0 0 1 5.2 5.2 V194.0 Z" class="ent-head"/>
+<line x1="1000" y1="194.0" x2="1250" y2="194.0" stroke="#364fc7" stroke-width="1.2"/>
+<text x="1014" y="180.0" class="ent-name">RÔLE</text>
+<text x="1236" y="180.0" text-anchor="end" class="ent-table">roles</text>
+<text x="1014" y="218.0" class="attr-id">id</text>
+<text x="1236" y="218.0" text-anchor="end" class="type">INTEGER</text>
+<text x="1014" y="240.0" class="attr">name</text>
+<text x="1236" y="240.0" text-anchor="end" class="type">VARCHAR(50) · UQ</text>
+<text x="1014" y="262.0" class="attr">description</text>
+<text x="1236" y="262.0" text-anchor="end" class="type">TEXT · NULL</text>
+</g>
+<g id="associations">
+<rect x="170" y="472.0" width="300" height="166" rx="6" class="ent-box"/>
+<path d="M170.8 512.0 V478.0 a5.2 5.2 0 0 1 5.2 -5.2 H464 a5.2 5.2 0 0 1 5.2 5.2 V512.0 Z" class="ent-head"/>
+<line x1="170" y1="512.0" x2="470" y2="512.0" stroke="#364fc7" stroke-width="1.2"/>
+<text x="184" y="498.0" class="ent-name">ASSOCIATION</text>
+<text x="456" y="498.0" text-anchor="end" class="ent-table">associations</text>
+<text x="184" y="536.0" class="attr-id">id</text>
+<text x="456" y="536.0" text-anchor="end" class="type">INTEGER</text>
+<text x="184" y="558.0" class="attr">name</text>
+<text x="456" y="558.0" text-anchor="end" class="type">VARCHAR(100) · UQ</text>
+<text x="184" y="580.0" class="attr">description</text>
+<text x="456" y="580.0" text-anchor="end" class="type">TEXT · NULL</text>
+<text x="184" y="602.0" class="attr">created_at</text>
+<text x="456" y="602.0" text-anchor="end" class="type">TIMESTAMPTZ</text>
+<text x="184" y="624.0" class="attr">updated_at</text>
+<text x="456" y="624.0" text-anchor="end" class="type">TIMESTAMPTZ</text>
+</g>
+<g id="tournaments">
+<rect x="810" y="428.0" width="320" height="254" rx="6" class="ent-box"/>
+<path d="M810.8 468.0 V434.0 a5.2 5.2 0 0 1 5.2 -5.2 H1124 a5.2 5.2 0 0 1 5.2 5.2 V468.0 Z" class="ent-head"/>
+<line x1="810" y1="468.0" x2="1130" y2="468.0" stroke="#364fc7" stroke-width="1.2"/>
+<text x="824" y="454.0" class="ent-name">TOURNOI</text>
+<text x="1116" y="454.0" text-anchor="end" class="ent-table">tournaments</text>
+<text x="824" y="492.0" class="attr-id">id</text>
+<text x="1116" y="492.0" text-anchor="end" class="type">INTEGER</text>
+<text x="824" y="514.0" class="attr">name</text>
+<text x="1116" y="514.0" text-anchor="end" class="type">VARCHAR(150)</text>
+<text x="824" y="536.0" class="attr">description</text>
+<text x="1116" y="536.0" text-anchor="end" class="type">TEXT · NULL</text>
+<text x="824" y="558.0" class="attr">status</text>
+<text x="1116" y="558.0" text-anchor="end" class="type">VARCHAR(20) = 'draft'</text>
+<text x="824" y="580.0" class="attr">max_participants</text>
+<text x="1116" y="580.0" text-anchor="end" class="type">INTEGER · NULL</text>
+<text x="824" y="602.0" class="attr">start_date</text>
+<text x="1116" y="602.0" text-anchor="end" class="type">TIMESTAMPTZ · NULL</text>
+<text x="824" y="624.0" class="attr">end_date</text>
+<text x="1116" y="624.0" text-anchor="end" class="type">TIMESTAMPTZ · NULL</text>
+<text x="824" y="646.0" class="attr">created_at</text>
+<text x="1116" y="646.0" text-anchor="end" class="type">TIMESTAMPTZ</text>
+<text x="824" y="668.0" class="attr">updated_at</text>
+<text x="1116" y="668.0" text-anchor="end" class="type">TIMESTAMPTZ</text>
+</g>
+<line x1="300" y1="215" x2="341" y2="215" class="link"/>
+<line x1="449" y1="215" x2="490" y2="215" class="link"/>
+<ellipse cx="395" cy="215" rx="54" ry="30" class="rel"/>
+<text x="395" y="219" text-anchor="middle" class="rel-name">DÉTENIR</text>
+<text x="395" y="265" text-anchor="middle" class="rel-hint">FK refresh_tokens.user_id</text>
+<text x="308" y="206" class="card">1,1</text>
+<text x="482" y="206" text-anchor="end" class="card">0,n</text>
+<line x1="790" y1="215" x2="841" y2="215" class="link"/>
+<line x1="949" y1="215" x2="1000" y2="215" class="link"/>
+<ellipse cx="895" cy="215" rx="54" ry="30" class="rel"/>
+<text x="895" y="219" text-anchor="middle" class="rel-name">POSSÉDER</text>
+<text x="895" y="265" text-anchor="middle" class="rel-hint">table user_roles</text>
+<text x="798" y="206" class="card">0,n</text>
+<text x="992" y="206" text-anchor="end" class="card">0,n</text>
+<line x1="470" y1="555" x2="576" y2="555" class="link"/>
+<line x1="704" y1="555" x2="810" y2="555" class="link"/>
+<ellipse cx="640" cy="555" rx="64" ry="30" class="rel"/>
+<text x="640" y="559" text-anchor="middle" class="rel-name">ORGANISER</text>
+<text x="640" y="605" text-anchor="middle" class="rel-hint">FK tournaments.association_id</text>
+<text x="478" y="546" class="card">0,n</text>
+<text x="802" y="546" text-anchor="end" class="card">1,1</text>
+<line x1="30" y1="707" x2="1250" y2="707" stroke="#dee2e6"/>
+<text x="30" y="735" class="legend">Légende : attribut souligné = identifiant (clé primaire) · UQ = unique · NULL = facultatif · = 'draft' = valeur par défaut · gris = type PostgreSQL</text>
+<text x="30" y="755" class="legend">Un utilisateur détient 0..n refresh tokens ; un token appartient à 1 seul utilisateur (ON DELETE CASCADE).</text>
+<text x="30" y="775" class="legend">Un utilisateur possède 0..n rôles et un rôle est attribué à 0..n utilisateurs (table de liaison user_roles, ON DELETE CASCADE).</text>
+<text x="30" y="795" class="legend">Une association organise 0..n tournois ; un tournoi est organisé par 1 seule association (ON DELETE CASCADE).</text>
+</svg>

@@ -11,11 +11,13 @@ Subject: Tournament organization platform.
   - `tests/` — tests pytest (PostgreSQL via testcontainers)
   - `pyproject.toml` / `uv.lock` — dépendances et configuration (ruff, pytest)
 - `compose.yaml` — service PostgreSQL 17 (`db`) pour le développement
+- `docs/` — documentation (MCD de la base : `docs/mcd.svg`)
 - `frontend/` — interface Vue.js (à venir)
 
 ## Base de données
 
 PostgreSQL 17 (seul moteur, via Docker) ; schéma géré par les migrations Alembic.
+Modèle conceptuel des données : [`docs/mcd.svg`](docs/mcd.svg).
 
 ```sh
 cp .env.example .env                      # identifiants PostgreSQL (optionnel)
