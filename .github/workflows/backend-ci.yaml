@@ -5,11 +5,13 @@ on:
     branches: [main, dev]
     paths:
       - "backend/**"
+      - "compose.yaml"
       - ".github/workflows/backend-ci.yaml"
   pull_request:
     branches: [main, dev]
     paths:
       - "backend/**"
+      - "compose.yaml"
       - ".github/workflows/backend-ci.yaml"
 
 concurrency:
@@ -50,5 +52,46 @@ jobs:
         run: uv python install 3.14
       - name: Sync dependencies
         run: uv sync --locked
+      # Tests run against a real PostgreSQL started by testcontainers (Docker is
+      # available on ubuntu-latest); the schema is built with the Alembic migrations.
       - name: Tests
         run: uv run pytest
+
+  migrations:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tournament_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tournament_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/tournament_db
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install Python
+        run: uv python install 3.14
+      - name: Sync dependencies
+        run: uv sync --locked
+      - name: Upgrade empty database to head
+        run: uv run alembic upgrade head
+      - name: Check models match migrations
+        run: uv run alembic check
+      - name: Downgrade to base
+        run: uv run alembic downgrade base
+      - name: Upgrade again from scratch
+        run: uv run alembic upgrade head
