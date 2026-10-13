@@ -33,6 +33,8 @@ Le schéma est défini **uniquement par les migrations versionnées [Alembic](ht
 
 ![MCD du schéma](../docs/mcd.svg)
 
+> Règle de gestion : tout utilisateur est **participant** par défaut, même sans association (statut implicite, non stocké). Les rôles de `memberships` (organizer…) s'y ajoutent au sein d'une association ; l'administrateur plateforme est `users.is_superuser`.
+
 ### Prérequis
 
 - [Docker](https://docs.docker.com/get-docker/) avec Docker Compose (base locale **et** tests)
