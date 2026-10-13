@@ -1,29 +1,19 @@
 <script setup lang="ts">
-import { computed, ref, useSlots, type Component } from 'vue'
+import { computed, inject, ref, useSlots } from 'vue'
+import {
+  buttonGroupKey,
+  type ButtonSize,
+  type ButtonType,
+  type ButtonVariant,
+  type IconPosition,
+  type UIButtonProps,
+} from './button.types'
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
-export type ButtonSize = 'sm' | 'md' | 'lg'
-export type ButtonType = 'button' | 'submit' | 'reset'
-export type IconPosition = 'left' | 'right'
-
-export interface UIButtonProps {
-  variant?: ButtonVariant
-  size?: ButtonSize
-  type?: ButtonType
-  disabled?: boolean
-  loading?: boolean
-  iconOnly?: boolean
-  iconPosition?: IconPosition
-  icon?: Component | object | string
-  iconLeft?: Component | object | string
-  iconRight?: Component | object | string
-  onClick?: (event: MouseEvent) => unknown | Promise<unknown>
-  action?: (event: MouseEvent) => unknown | Promise<unknown>
-}
+export type { ButtonSize, ButtonType, ButtonVariant, IconPosition, UIButtonProps }
 
 const props = withDefaults(defineProps<UIButtonProps>(), {
-  variant: 'primary',
-  size: 'md',
+  variant: undefined,
+  size: undefined,
   type: 'button',
   disabled: false,
   loading: false,
@@ -37,10 +27,14 @@ const props = withDefaults(defineProps<UIButtonProps>(), {
 })
 
 const slots = useSlots()
+const buttonGroup = inject(buttonGroupKey, null)
 const internalLoading = ref(false)
 
+const actualSize = computed<ButtonSize>(() => props.size ?? buttonGroup?.size.value ?? 'md')
+const actualVariant = computed<ButtonVariant>(() => props.variant ?? buttonGroup?.variant.value ?? 'primary')
+
 const isWaiting = computed(() => props.loading || internalLoading.value)
-const isDisabled = computed(() => props.disabled || isWaiting.value)
+const isDisabled = computed(() => props.disabled || (buttonGroup?.disabled.value ?? false) || isWaiting.value)
 
 const isIconOnly = computed(() => {
   if (props.iconOnly) return true
@@ -98,7 +92,7 @@ const showLeftSpinner = computed(() => {
 
 const sizeClasses = computed(() => {
   if (isIconOnly.value) {
-    switch (props.size) {
+    switch (actualSize.value) {
       case 'sm':
         return 'h-8 w-8 p-0 rounded-md'
       case 'lg':
@@ -109,7 +103,7 @@ const sizeClasses = computed(() => {
     }
   }
 
-  switch (props.size) {
+  switch (actualSize.value) {
     case 'sm':
       return 'h-8 px-3 text-xs gap-1.5 rounded-md'
     case 'lg':
@@ -121,7 +115,7 @@ const sizeClasses = computed(() => {
 })
 
 const iconClasses = computed(() => {
-  switch (props.size) {
+  switch (actualSize.value) {
     case 'sm':
       return 'w-3.5 h-3.5 shrink-0'
     case 'lg':
@@ -133,7 +127,7 @@ const iconClasses = computed(() => {
 })
 
 const variantClasses = computed(() => {
-  switch (props.variant) {
+  switch (actualVariant.value) {
     case 'secondary':
       return 'bg-secondary text-secondary-foreground hover:bg-secondary-hover active:bg-secondary-active focus-visible:ring-secondary'
     case 'ghost':

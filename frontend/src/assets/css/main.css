@@ -20,6 +20,8 @@
   --color-danger-hover: #b91c1c;
   --color-danger-active: #991b1b;
   --color-danger-foreground: #ffffff;
+
+  --color-btn-group-divider: #cbd5e1;
 }
 
 @layer base {
@@ -43,6 +45,8 @@
     --color-danger-hover: #b91c1c;
     --color-danger-active: #991b1b;
     --color-danger-foreground: #ffffff;
+
+    --color-btn-group-divider: #cbd5e1;
   }
 
   .dark {
@@ -65,5 +69,7 @@
     --color-danger-hover: #dc2626;
     --color-danger-active: #b91c1c;
     --color-danger-foreground: #ffffff;
+
+    --color-btn-group-divider: #475569;
   }
 }
