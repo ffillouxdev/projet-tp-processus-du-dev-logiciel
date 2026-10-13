@@ -1,7 +1,7 @@
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import Engine, inspect
+from sqlalchemy import Engine, inspect, text
 
 from app.database import Base
 from app.db import get_alembic_config
@@ -34,3 +34,9 @@ def test_models_match_migrations(engine: Engine):
         context = MigrationContext.configure(connection, opts={"compare_type": True})
         diff = compare_metadata(context, Base.metadata)
     assert diff == []
+
+
+def test_migrations_create_default_participant_role(engine: Engine):
+    with engine.connect() as connection:
+        names = connection.execute(text("SELECT name FROM roles")).scalars().all()
+    assert "participant" in names

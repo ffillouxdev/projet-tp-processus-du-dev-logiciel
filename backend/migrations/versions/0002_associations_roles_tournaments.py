@@ -1,5 +1,7 @@
 """associations, roles, memberships, tournaments and participants
 
+Also gives every user a global role, "participant" by default (users.role_id).
+
 Revision ID: 0002
 Revises: 0001
 Create Date: 2026-10-13 11:06:38.610747
@@ -50,6 +52,20 @@ def upgrade() -> None:
     )
     op.create_index(op.f("ix_roles_id"), "roles", ["id"], unique=False)
     op.create_index(op.f("ix_roles_name"), "roles", ["name"], unique=True)
+
+    # Default global role of every user, required by users.role_id
+    roles = sa.table("roles", sa.column("name", sa.String), sa.column("description", sa.Text))
+    op.bulk_insert(
+        roles, [{"name": "participant", "description": "Default role given to every user"}]
+    )
+    op.add_column("users", sa.Column("role_id", sa.Integer(), nullable=True))
+    op.execute("UPDATE users SET role_id = (SELECT id FROM roles WHERE name = 'participant')")
+    op.alter_column("users", "role_id", nullable=False)
+    op.create_index(op.f("ix_users_role_id"), "users", ["role_id"], unique=False)
+    op.create_foreign_key(
+        "users_role_id_fkey", "users", "roles", ["role_id"], ["id"], ondelete="RESTRICT"
+    )
+
     op.create_table(
         "memberships",
         sa.Column("user_id", sa.Integer(), nullable=False),
@@ -130,6 +146,9 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_memberships_role_id"), table_name="memberships")
     op.drop_index(op.f("ix_memberships_association_id"), table_name="memberships")
     op.drop_table("memberships")
+    op.drop_constraint("users_role_id_fkey", "users", type_="foreignkey")
+    op.drop_index(op.f("ix_users_role_id"), table_name="users")
+    op.drop_column("users", "role_id")
     op.drop_index(op.f("ix_roles_name"), table_name="roles")
     op.drop_index(op.f("ix_roles_id"), table_name="roles")
     op.drop_table("roles")
