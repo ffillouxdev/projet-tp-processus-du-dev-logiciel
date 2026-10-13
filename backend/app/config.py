@@ -14,10 +14,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # Database
-    # Default is SQLite for quick local startup without an external DB server.
-    # Production uses PostgreSQL: postgresql+psycopg://user:password@localhost:5432/tournament_db
-    DATABASE_URL: str = "sqlite:///./tournament.db"
+    # Database (PostgreSQL only, see compose.yaml at the repository root)
+    DATABASE_URL: str = "postgresql+psycopg://postgres:postgres@localhost:5432/tournament_db"
 
     # Environment & CORS
     ENVIRONMENT: str = "development"
