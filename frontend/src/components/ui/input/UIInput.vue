@@ -154,7 +154,7 @@ const inputClasses = computed(() => [
       <!-- Right Icon -->
       <div
         v-if="iconRight || $slots['icon-right'] || $slots.trailing"
-        class="absolute end-3 flex items-center pointer-events-none text-input-placeholder"
+        class="absolute end-3 flex items-center text-input-placeholder"
       >
         <slot name="icon-right">
           <slot name="trailing">
