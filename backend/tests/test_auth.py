@@ -1,8 +1,4 @@
 from fastapi.testclient import TestClient
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
-from app.models import User
 
 
 def test_register_success(client: TestClient):
@@ -27,17 +23,6 @@ def test_register_success(client: TestClient):
     assert "access_token" in data["tokens"]
     assert "refresh_token" in data["tokens"]
     assert data["tokens"]["token_type"] == "bearer"
-
-
-def test_register_assigns_default_participant_role(client: TestClient, db_session: Session):
-    response = client.post(
-        "/auth/register",
-        json={"email": "role@example.com", "username": "roleuser", "password": "Password123!"},
-    )
-    assert response.status_code == 201
-    user = db_session.scalar(select(User).where(User.username == "roleuser"))
-    assert user is not None
-    assert user.role.name == "participant"
 
 
 def test_register_duplicate_email(client: TestClient):

@@ -4,7 +4,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Association, Membership, Role, Tournament, TournamentParticipant, User
-from app.models.role import DEFAULT_ROLE_NAME
 
 
 def _make_user(db: Session, username: str = "modeluser") -> User:
@@ -12,30 +11,6 @@ def _make_user(db: Session, username: str = "modeluser") -> User:
     db.add(user)
     db.flush()
     return user
-
-
-def test_new_user_gets_the_default_participant_role(db_session: Session):
-    user = _make_user(db_session)
-    db_session.refresh(user)
-
-    assert user.role.name == DEFAULT_ROLE_NAME
-
-
-def test_user_global_role_can_be_changed(db_session: Session):
-    admin = Role(name="admin")
-    user = User(email="a@example.com", username="adminuser", hashed_password="hash", role=admin)
-    db_session.add(user)
-    db_session.flush()
-
-    assert user.role_id == admin.id
-    assert admin.users == [user]
-
-
-def test_default_role_cannot_be_deleted_while_assigned(db_session: Session):
-    _make_user(db_session)
-
-    with pytest.raises(IntegrityError), db_session.begin_nested():
-        db_session.execute(Role.__table__.delete().where(Role.name == DEFAULT_ROLE_NAME))
 
 
 def test_user_has_a_role_inside_an_association(db_session: Session):

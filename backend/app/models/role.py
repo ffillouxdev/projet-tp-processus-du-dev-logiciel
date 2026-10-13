@@ -7,14 +7,10 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.membership import Membership
-    from app.models.user import User
-
-# Global role given to every user; created by the migrations
-DEFAULT_ROLE_NAME = "participant"
 
 
 class Role(Base):
-    """Role of a user: globally (users.role_id) or inside an association (memberships)."""
+    """Role a user holds inside an association (e.g. organizer, member)."""
 
     __tablename__ = "roles"
 
@@ -22,5 +18,4 @@ class Role(Base):
     name: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    users: Mapped[list[User]] = relationship("User", back_populates="role")
     memberships: Mapped[list[Membership]] = relationship("Membership", back_populates="role")
