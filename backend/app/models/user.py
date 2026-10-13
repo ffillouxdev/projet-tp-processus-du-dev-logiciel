@@ -7,7 +7,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 if TYPE_CHECKING:
-    from app.models.role import Role
+    from app.models.membership import Membership
+    from app.models.participant import TournamentParticipant
     from app.models.token import RefreshToken
 
 
@@ -39,9 +40,16 @@ class User(Base):
         cascade="all, delete-orphan",
     )
 
-    roles: Mapped[list[Role]] = relationship(
-        "Role",
-        secondary="user_roles",
-        back_populates="users",
+    memberships: Mapped[list[Membership]] = relationship(
+        "Membership",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    participations: Mapped[list[TournamentParticipant]] = relationship(
+        "TournamentParticipant",
+        back_populates="user",
+        cascade="all, delete-orphan",
         passive_deletes=True,
     )

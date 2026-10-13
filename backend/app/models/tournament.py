@@ -8,6 +8,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.association import Association
+    from app.models.participant import TournamentParticipant
 
 
 class Tournament(Base):
@@ -44,3 +45,9 @@ class Tournament(Base):
     )
 
     association: Mapped[Association] = relationship("Association", back_populates="tournaments")
+    participants: Mapped[list[TournamentParticipant]] = relationship(
+        "TournamentParticipant",
+        back_populates="tournament",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )

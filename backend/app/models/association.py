@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 if TYPE_CHECKING:
+    from app.models.membership import Membership
     from app.models.tournament import Tournament
 
 
@@ -30,6 +31,13 @@ class Association(Base):
 
     tournaments: Mapped[list[Tournament]] = relationship(
         "Tournament",
+        back_populates="association",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    memberships: Mapped[list[Membership]] = relationship(
+        "Membership",
         back_populates="association",
         cascade="all, delete-orphan",
         passive_deletes=True,

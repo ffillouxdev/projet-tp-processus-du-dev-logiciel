@@ -9,10 +9,11 @@ from app.db import get_alembic_config
 EXPECTED_TABLES = {
     "alembic_version",
     "associations",
+    "memberships",
     "refresh_tokens",
     "roles",
+    "tournament_participants",
     "tournaments",
-    "user_roles",
     "users",
 }
 
