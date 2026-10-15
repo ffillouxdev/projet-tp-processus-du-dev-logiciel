@@ -33,7 +33,7 @@ Le schéma est défini **uniquement par les migrations versionnées [Alembic](ht
 
 ![MCD du schéma](../docs/mcd.svg)
 
-> Règle de gestion : tout utilisateur est **participant** par défaut, même sans association (statut implicite, non stocké). Les rôles de `memberships` (organizer…) s'y ajoutent au sein d'une association ; l'administrateur plateforme est `users.is_superuser`.
+> Règle de gestion : tout utilisateur est **participant** par défaut, même sans association (statut implicite, non stocké). Les rôles de `memberships` (organizer…) s'y ajoutent au sein d'une association, et chaque rôle est attribué au moins une fois (cardinalité 1,n, non contrainte en base) ; l'administrateur plateforme est `users.is_superuser`.
 
 ### Prérequis
 
