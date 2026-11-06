@@ -38,7 +38,7 @@ const columns = computed(() => {
 
 <template>
   <section class="min-w-0" aria-label="Round suisse">
-    <h2 v-if="title" class="mb-2 text-sm font-semibold text-gray-900">{{ title }}</h2>
+    <h2 v-if="title" class="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ title }}</h2>
     <div
       class="max-h-144 overflow-auto rounded-lg border border-dialog-border bg-secondary/20 p-4 overscroll-contain [scrollbar-width:thin] touch-pan-x touch-pan-y"
     >
@@ -53,7 +53,9 @@ const columns = computed(() => {
             :key="group.label"
             class="rounded-xl border border-dialog-border/70 bg-dialog-bg/60 p-2"
           >
-            <h3 class="mb-2 text-center text-xs font-bold text-gray-500">{{ group.label }}</h3>
+            <h3 class="mb-2 text-center text-xs font-bold text-gray-500 dark:text-gray-400">
+              {{ group.label }}
+            </h3>
             <div class="flex flex-col gap-2">
               <BracketMatch
                 v-for="result in group.matches"

@@ -27,19 +27,19 @@ defineProps<{
         }"
       >
         <p
-          class="min-w-0 flex-1 truncate text-xs font-semibold text-gray-900"
+          class="min-w-0 flex-1 truncate text-xs font-semibold text-gray-900 dark:text-gray-100"
           :class="{ 'text-primary': player.status === 'winner' }"
         >
           {{ player.name }}
         </p>
         <span
           v-if="player.score !== undefined"
-          class="min-w-4 text-center text-sm font-bold text-gray-900"
+          class="min-w-4 text-center text-sm font-bold text-gray-900 dark:text-gray-100"
           :class="{ 'text-primary': player.status === 'winner' }"
         >
           {{ player.score }}
         </span>
-        <span v-else-if="player.status === 'pending'" class="text-[10px] text-gray-500">-</span>
+        <span v-else-if="player.status === 'pending'" class="text-[10px] text-gray-500 dark:text-gray-400">-</span>
       </div>
     </div>
   </article>
