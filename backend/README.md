@@ -14,10 +14,30 @@ L'API implémente un système d'authentification complet et sécurisé respectan
   - **Refresh Token** : JWT de longue durée (7 jours par défaut) stocké en base de données avec identifiant unique (`jti`).
   - **Rotation de jetons** : À chaque rafraîchissement, l'ancien refresh token est révoqué et une nouvelle paire est émise.
   - **Détection d'attaque par rejeu (Replay Attack Detection)** : La réutilisation d'un refresh token déjà révoqué invalide immédiatement toutes les sessions actives de l'utilisateur.
-- **Profil Utilisateur (`GET /auth/me` & `PATCH /auth/me`)** : Récupération et mise à jour des informations de l'utilisateur connecté (nécessite l'Access Token en Bearer).
+- **Profil Utilisateur (`GET /auth/me`, `PATCH /auth/me` & `GET /auth/me/memberships`)** : Récupération et mise à jour des informations de l'utilisateur connecté, ainsi que la liste de ses associations et rôles (nécessite l'Access Token en Bearer).
 - **Changement de mot de passe (`POST /auth/change-password`)** : Vérification de l'ancien mot de passe, mise à jour du hash, et révocation de toutes les sessions actives.
 - **Déconnexion (`POST /auth/logout`)** : Révocation du Refresh Token spécifié.
 - **Déconnexion de tous les appareils (`POST /auth/logout-all`)** : Révocation de toutes les sessions de l'utilisateur connecté.
+
+---
+
+## 🏛️ Rôles, Associations & Organisateurs
+
+Gestion des associations organisatrices, du catalogue des rôles et du rattachement des utilisateurs :
+
+- **Catalogue des rôles (`/roles`)** :
+  - `GET /roles` & `GET /roles/{role_id}` — consultation publique des rôles (`organizer`, `member`…).
+  - `POST /roles`, `PATCH /roles/{role_id}`, `DELETE /roles/{role_id}` — création, modification et suppression d'un rôle (`409 Conflict` si le rôle est encore attribué à un membre), réservées aux administrateurs plateforme (`users.is_superuser = true`).
+- **Associations (`/associations`)** :
+  - `GET /associations` & `GET /associations/{association_id}` — consultation publique des associations et du détail de leurs membres/rôles.
+  - `POST /associations` & `DELETE /associations/{association_id}` — création et suppression d'une association, réservées aux administrateurs plateforme (`is_superuser`).
+  - `PATCH /associations/{association_id}` — modification d'une association par un administrateur plateforme ou un responsable de cette association (membre ayant le rôle `admin` ou `organizer`).
+- **Membres & attribution des rôles (`/associations/{association_id}/members`)** :
+  - `GET /associations/{association_id}/members` — liste publique des membres, filtrable par rôle via `?role=organizer` pour identifier qui organise.
+  - `POST /associations/{association_id}/members` — associer un utilisateur (`user_id`) à l'association avec un rôle (`role_id`).
+  - `PATCH /associations/{association_id}/members/{user_id}` — modifier le rôle d'un membre dans l'association.
+  - `DELETE /associations/{association_id}/members/{user_id}` — retirer un utilisateur de l'association.
+  - Les opérations d'écriture sur les membres sont autorisées aux administrateurs plateforme (`is_superuser`) ainsi qu'aux membres actifs détenant le rôle `admin` ou `organizer` au sein de l'association ciblée (`401` si non authentifié, `403` sinon).
 
 ---
 
@@ -86,6 +106,15 @@ Sans `make` : `uv run python -m app.seed`. Le chargement est **idempotent** : ch
 
 On peut se connecter avec le nom d'utilisateur ou l'e-mail. Le jeu contient aussi 6 tournois, 3 par association, couvrant les statuts `draft`, `open`, `ongoing` et `finished`. Les dates sont calculées par rapport au jour du chargement. Les tournois `draft` n'ont aucun inscrit et les inscriptions respectent `max_participants`. Le contenu se modifie dans `app/seed.py`.
 
+### Gérer un administrateur plateforme en CLI
+
+En dehors du jeu de démo, un administrateur plateforme (`is_superuser = true`) peut être créé ou promu via `app.db` :
+
+```bash
+uv run python -m app.db create-admin --email admin@example.com --username superadmin --password "Secret1234"
+uv run python -m app.db promote-admin <username_ou_email>
+```
+
 ### Créer une nouvelle migration
 
 1. Modifier/ajouter le modèle dans `app/models/` (et l'exporter dans `app/models/__init__.py`).
@@ -125,17 +154,19 @@ TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/tourname
 # Installation des dépendances
 uv sync
 
-# Démarrer PostgreSQL et appliquer les migrations
+# Démarrer PostgreSQL, appliquer les migrations et charger le jeu de démo
 make db-init
+make db-seed
 
 # Lancer le serveur de développement avec Swagger UI
 uv run fastapi dev main.py
 # ou
 uv run uvicorn main:app --reload
 
-# Vérifications de qualité de code
+# Vérifications de qualité de code et de typage
 uv run ruff check .
 uv run ruff format --check .
+uv run mypy .
 
 # Exécuter l'ensemble des tests (Docker requis)
 uv run pytest

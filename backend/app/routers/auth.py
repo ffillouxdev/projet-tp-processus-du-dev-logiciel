@@ -5,13 +5,15 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_active_user
+from app.models.membership import Membership
 from app.models.token import RefreshToken
 from app.models.user import User
+from app.schemas.association import UserMembershipResponse
 from app.schemas.token import (
     AuthResponse,
     LoginRequest,
@@ -271,6 +273,26 @@ def get_current_user_profile(
     current_user: Annotated[User, Depends(get_current_active_user)],
 ) -> UserResponse:
     return UserResponse.model_validate(current_user)
+
+
+@router.get(
+    "/me/memberships",
+    response_model=list[UserMembershipResponse],
+    summary="Get current user's associations and roles",
+    description="Returns every association the authenticated user belongs to and their role in it.",
+)
+def get_current_user_memberships(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[UserMembershipResponse]:
+    stmt = (
+        select(Membership)
+        .options(selectinload(Membership.association), selectinload(Membership.role))
+        .where(Membership.user_id == current_user.id)
+        .order_by(Membership.joined_at)
+    )
+    memberships = db.scalars(stmt).all()
+    return [UserMembershipResponse.model_validate(m) for m in memberships]
 
 
 @router.patch(

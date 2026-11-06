@@ -6,6 +6,7 @@ Subject: Tournament organization platform.
 
 - `backend/` — API REST FastAPI (Python 3.14, dépendances gérées par uv)
   - `main.py` — point d'entrée de l'application (`app = FastAPI()`)
+  - `app/routers/` — routes REST (`/auth`, `/associations`, `/roles`)
   - `app/models/` — modèles SQLAlchemy (users, associations, roles, memberships, tournaments, participants…)
   - `migrations/` — migrations Alembic versionnées (seule source du schéma)
   - `tests/` — tests pytest (PostgreSQL via testcontainers)
@@ -77,7 +78,7 @@ Les workflows `.github/workflows/backend-ci.yaml` et `.github/workflows/frontend
 
 `GET /health` retourne l'état de l'API et de ses dépendances critiques, sans authentification.
 
-- `200` — `{"status": "ok", "dependencies": {}}` : API et dépendances disponibles
+- `200` — `{"status": "ok", "dependencies": {"database": "ok"}}` : API et dépendances disponibles
 - `503` — `{"status": "unhealthy", "dependencies": {"...": "unavailable"}}` : au moins une dépendance critique indisponible
 
 Pour vérifier une dépendance critique, enrichir `check_dependencies()` dans `backend/main.py`.
