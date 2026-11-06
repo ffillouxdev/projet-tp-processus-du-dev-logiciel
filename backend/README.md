@@ -64,6 +64,28 @@ Au démarrage de l'API (`fastapi dev`), les migrations en attente sont **appliqu
 
 Pour repartir d'un volume totalement vierge : `docker compose -f ../compose.yaml down -v && make db-init`.
 
+### Données de démonstration
+
+```bash
+make db-seed    # applique les migrations puis charge le jeu de démo
+```
+
+Sans `make` : `uv run python -m app.seed`. Le chargement est **idempotent** : chaque enregistrement est retrouvé par sa clé naturelle (nom d'utilisateur, nom de rôle, nom d'association, nom du tournoi dans son association) puis mis à jour. Relancer la commande ne crée donc aucun doublon et remet les comptes de démo dans leur état initial. Pour repartir de zéro : `make db-reset && make db-seed`.
+
+> ⚠️ **Réservé à l'environnement de démo.** Tous les comptes partagent le mot de passe public **`Demo1234!`**. La commande refuse de s'exécuter si `ENVIRONMENT=production`.
+
+| Utilisateur | E-mail | Profil |
+|---|---|---|
+| `admin` | `admin@demo.example.com` | administrateur plateforme (`is_superuser`) |
+| `alice` | `alice@demo.example.com` | organizer de **Avignon Chess Club** |
+| `bob` | `bob@demo.example.com` | organizer de **Vaucluse eSport** |
+| `chloe` | `chloe@demo.example.com` | member de Avignon Chess Club, inscrite à des tournois des deux associations |
+| `david` | `david@demo.example.com` | member de Vaucluse eSport |
+| `emma` | `emma@demo.example.com` | member de Vaucluse eSport |
+| `hugo` | `hugo@demo.example.com` | compte **désactivé** (connexion refusée, 403) |
+
+On peut se connecter avec le nom d'utilisateur ou l'e-mail. Le jeu contient aussi 6 tournois, 3 par association, couvrant les statuts `draft`, `open`, `ongoing` et `finished`. Les dates sont calculées par rapport au jour du chargement. Les tournois `draft` n'ont aucun inscrit et les inscriptions respectent `max_participants`. Le contenu se modifie dans `app/seed.py`.
+
 ### Créer une nouvelle migration
 
 1. Modifier/ajouter le modèle dans `app/models/` (et l'exporter dans `app/models/__init__.py`).

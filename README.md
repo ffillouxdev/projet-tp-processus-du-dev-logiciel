@@ -25,10 +25,13 @@ docker compose up -d --wait db            # démarrer PostgreSQL
 cd backend
 uv run alembic upgrade head               # créer / mettre à jour le schéma (= make db-init)
 uv run python -m app.db reset             # réinitialiser la base (= make db-reset, perte des données)
+uv run python -m app.seed                 # charger les données de démo (= make db-seed, idempotent)
 docker compose down                       # arrêter (ajouter -v pour supprimer le volume)
 ```
 
-Détails (variables, création d'une migration) : [`backend/README.md`](backend/README.md#️-base-de-données-postgresql--alembic).
+Détails (variables, création d'une migration, comptes de démo) : [`backend/README.md`](backend/README.md#️-base-de-données-postgresql--alembic).
+
+> Les comptes de démo (`admin`, `alice`, `bob`…, mot de passe `Demo1234!`) sont **réservés à l'environnement de démo** : voir [Données de démonstration](backend/README.md#données-de-démonstration).
 
 ## Backend — démarrage
 
