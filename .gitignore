@@ -1,9 +1,0 @@
-# Environment
-.env
-.env.*
-!.env.example
-
-# Docker
-pgdata/
-compose.override.yaml
-compose.override.yml
