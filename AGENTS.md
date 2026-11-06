@@ -61,6 +61,7 @@ BREAKING CHANGE: `start_date` is now an ISO-8601 string
 - `uv sync` — installer les dépendances
 - `uv run ruff check .` — lint
 - `uv run ruff format --check .` — vérification du format
+- `uv run mypy .` — vérification des types
 - `uv run pytest` — tests (PostgreSQL via testcontainers : Docker requis)
 - `make db-up` / `make db-init` / `make db-reset` — base PostgreSQL locale (Docker Compose + Alembic)
 - `uv run alembic revision --autogenerate -m "<message>"` — nouvelle migration (à relire avant commit)
@@ -73,8 +74,14 @@ d'un modèle doit s'accompagner d'une révision réversible (`upgrade` + `downgr
 ## CI
 `.github/workflows/backend-ci.yaml` exécute sur push/PR vers `main`/`dev` lorsque `backend/**` change :
 - `lint` — ruff check + format ;
+- `typecheck` — mypy ;
 - `test` — pytest sur PostgreSQL (testcontainers) ;
 - `migrations` — `alembic upgrade head`, `alembic check`, `alembic downgrade base`, puis `upgrade head` sur un service PostgreSQL.
+
+`.github/workflows/frontend-ci.yml` exécute sur push/PR vers `main`/`dev` lorsque `frontend/**` change :
+- `lint` — oxlint + ESLint ;
+- `typecheck` — vue-tsc ;
+- `test` — vitest.
 
 ## Mettre à jour le README
 Mettre à jour le README lorsqu'il a besoin d'être mis à jour.

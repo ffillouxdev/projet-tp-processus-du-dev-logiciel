@@ -9,7 +9,7 @@ Subject: Tournament organization platform.
   - `app/models/` — modèles SQLAlchemy (users, associations, roles, memberships, tournaments, participants…)
   - `migrations/` — migrations Alembic versionnées (seule source du schéma)
   - `tests/` — tests pytest (PostgreSQL via testcontainers)
-  - `pyproject.toml` / `uv.lock` — dépendances et configuration (ruff, pytest)
+  - `pyproject.toml` / `uv.lock` — dépendances et configuration (ruff, mypy, pytest)
 - `compose.yaml` — service PostgreSQL 17 (`db`) pour le développement
 - `docs/` — documentation (MCD de la base : `docs/mcd.svg`)
 - `frontend/` — interface Vue.js (à venir)
@@ -40,17 +40,35 @@ make db-init                # PostgreSQL + migrations
 uv run fastapi dev main.py  # applique aussi les migrations en attente au démarrage
 ```
 
-## Tests
+## Qualité et intégration continue
+
+La CI GitHub Actions est **bloquante** : une erreur de lint, de type ou de test fait échouer la pull request.
+
+Backend — à exécuter depuis `backend/` :
 
 Docker doit être démarré : les tests lancent un PostgreSQL éphémère (testcontainers).
 
 ```sh
-cd backend
-uv run pytest
+uv sync                       # installer les dépendances
+uv run ruff check .           # lint
+uv run ruff format --check .  # vérification du format
+uv run mypy .                 # vérification des types
+uv run pytest                 # tests
+```
+
+Frontend — à exécuter depuis `frontend/` :
+
+```sh
+bun install         # installer les dépendances
+bun run lint        # lint (oxlint + ESLint)
+bun run type-check  # vérification des types (vue-tsc)
+bun run test        # tests (vitest)
 ```
 
 La CI (`.github/workflows/backend-ci.yaml`) exécute lint, tests et un job `migrations`
 (`alembic upgrade head`, `alembic check`, `alembic downgrade base`).
+
+Les workflows `.github/workflows/backend-ci.yaml` et `.github/workflows/frontend-ci.yml` se déclenchent sur les pull requests vers `main` et `dev`. Leur statut est visible dans la pull request (onglet « Checks »).
 
 ## Santé de l'API
 

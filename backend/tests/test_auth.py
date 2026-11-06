@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 
-def test_register_success(client: TestClient):
+def test_register_success(client: TestClient) -> None:
     response = client.post(
         "/auth/register",
         json={
@@ -25,7 +25,7 @@ def test_register_success(client: TestClient):
     assert data["tokens"]["token_type"] == "bearer"
 
 
-def test_register_duplicate_email(client: TestClient):
+def test_register_duplicate_email(client: TestClient) -> None:
     payload = {
         "email": "duplicate@example.com",
         "username": "userone",
@@ -44,7 +44,7 @@ def test_register_duplicate_email(client: TestClient):
     assert "email already exists" in second_res.json()["detail"].lower()
 
 
-def test_register_duplicate_username(client: TestClient):
+def test_register_duplicate_username(client: TestClient) -> None:
     payload = {
         "email": "user1@example.com",
         "username": "samenick",
@@ -63,7 +63,7 @@ def test_register_duplicate_username(client: TestClient):
     assert "username already exists" in second_res.json()["detail"].lower()
 
 
-def test_register_password_validation(client: TestClient):
+def test_register_password_validation(client: TestClient) -> None:
     # Too short
     res_short = client.post(
         "/auth/register",
@@ -86,7 +86,7 @@ def test_register_password_validation(client: TestClient):
     assert res_no_alpha.status_code == 422
 
 
-def test_register_invalid_username_format(client: TestClient):
+def test_register_invalid_username_format(client: TestClient) -> None:
     res = client.post(
         "/auth/register",
         json={"email": "val@example.com", "username": "bad user name!", "password": "Password123!"},
@@ -94,7 +94,7 @@ def test_register_invalid_username_format(client: TestClient):
     assert res.status_code == 422
 
 
-def test_login_with_email_success(client: TestClient):
+def test_login_with_email_success(client: TestClient) -> None:
     client.post(
         "/auth/register",
         json={"email": "login@example.com", "username": "loginuser", "password": "Password123!"},
@@ -111,7 +111,7 @@ def test_login_with_email_success(client: TestClient):
     assert "refresh_token" in data["tokens"]
 
 
-def test_login_with_username_success(client: TestClient):
+def test_login_with_username_success(client: TestClient) -> None:
     client.post(
         "/auth/register",
         json={"email": "login2@example.com", "username": "player99", "password": "Password123!"},
@@ -125,7 +125,7 @@ def test_login_with_username_success(client: TestClient):
     assert response.json()["user"]["username"] == "player99"
 
 
-def test_login_invalid_password(client: TestClient):
+def test_login_invalid_password(client: TestClient) -> None:
     client.post(
         "/auth/register",
         json={"email": "login3@example.com", "username": "player100", "password": "Password123!"},
@@ -139,7 +139,7 @@ def test_login_invalid_password(client: TestClient):
     assert "incorrect" in response.json()["detail"].lower()
 
 
-def test_login_nonexistent_user(client: TestClient):
+def test_login_nonexistent_user(client: TestClient) -> None:
     response = client.post(
         "/auth/login",
         json={"identifier": "nonexistent@example.com", "password": "Password123!"},
@@ -147,7 +147,7 @@ def test_login_nonexistent_user(client: TestClient):
     assert response.status_code == 401
 
 
-def test_login_oauth2_form_token(client: TestClient):
+def test_login_oauth2_form_token(client: TestClient) -> None:
     client.post(
         "/auth/register",
         json={"email": "oauth@example.com", "username": "oauthuser", "password": "Password123!"},
@@ -164,7 +164,7 @@ def test_login_oauth2_form_token(client: TestClient):
     assert data["token_type"] == "bearer"
 
 
-def test_get_current_user_profile(client: TestClient):
+def test_get_current_user_profile(client: TestClient) -> None:
     reg = client.post(
         "/auth/register",
         json={"email": "me@example.com", "username": "meuser", "password": "Password123!"},
@@ -180,7 +180,7 @@ def test_get_current_user_profile(client: TestClient):
     assert response.json()["username"] == "meuser"
 
 
-def test_get_current_user_unauthorized(client: TestClient):
+def test_get_current_user_unauthorized(client: TestClient) -> None:
     # No auth header
     res_no_auth = client.get("/auth/me")
     assert res_no_auth.status_code == 401
@@ -190,7 +190,7 @@ def test_get_current_user_unauthorized(client: TestClient):
     assert res_bad_token.status_code == 401
 
 
-def test_get_current_user_rejects_refresh_token(client: TestClient):
+def test_get_current_user_rejects_refresh_token(client: TestClient) -> None:
     reg = client.post(
         "/auth/register",
         json={"email": "rf@example.com", "username": "rfuser", "password": "Password123!"},
@@ -205,7 +205,7 @@ def test_get_current_user_rejects_refresh_token(client: TestClient):
     assert "access token required" in response.json()["detail"].lower()
 
 
-def test_patch_profile(client: TestClient):
+def test_patch_profile(client: TestClient) -> None:
     reg = client.post(
         "/auth/register",
         json={"email": "patch@example.com", "username": "patchuser", "password": "Password123!"},
@@ -223,7 +223,7 @@ def test_patch_profile(client: TestClient):
     assert data["username"] == "newusername"
 
 
-def test_change_password_flow(client: TestClient):
+def test_change_password_flow(client: TestClient) -> None:
     reg = client.post(
         "/auth/register",
         json={

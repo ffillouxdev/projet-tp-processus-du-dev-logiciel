@@ -1,5 +1,5 @@
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, insert, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,7 +13,7 @@ def _make_user(db: Session, username: str = "modeluser") -> User:
     return user
 
 
-def test_user_has_a_role_inside_an_association(db_session: Session):
+def test_user_has_a_role_inside_an_association(db_session: Session) -> None:
     user = _make_user(db_session)
     club = Association(name="Chess Club")
     organizer = Role(name="organizer", description="Organizes the association tournaments")
@@ -27,7 +27,7 @@ def test_user_has_a_role_inside_an_association(db_session: Session):
     assert club.memberships == [membership]
 
 
-def test_user_can_join_an_association_only_once(db_session: Session):
+def test_user_can_join_an_association_only_once(db_session: Session) -> None:
     user = _make_user(db_session)
     club = Association(name="Go Club")
     member = Role(name="member")
@@ -36,13 +36,11 @@ def test_user_can_join_an_association_only_once(db_session: Session):
 
     with pytest.raises(IntegrityError), db_session.begin_nested():
         db_session.execute(
-            Membership.__table__.insert().values(
-                user_id=user.id, association_id=club.id, role_id=member.id
-            )
+            insert(Membership).values(user_id=user.id, association_id=club.id, role_id=member.id)
         )
 
 
-def test_deleting_user_cascades_to_memberships_and_participations(db_session: Session):
+def test_deleting_user_cascades_to_memberships_and_participations(db_session: Session) -> None:
     user = _make_user(db_session)
     club = Association(name="Esport League")
     tournament = Tournament(name="Cup", association=club)
@@ -62,17 +60,17 @@ def test_deleting_user_cascades_to_memberships_and_participations(db_session: Se
     assert db_session.scalar(select(Tournament).where(Tournament.name == "Cup")) is not None
 
 
-def test_role_in_use_cannot_be_deleted(db_session: Session):
+def test_role_in_use_cannot_be_deleted(db_session: Session) -> None:
     user = _make_user(db_session)
     referee = Role(name="referee")
     db_session.add(Membership(user=user, association=Association(name="Ref Club"), role=referee))
     db_session.flush()
 
     with pytest.raises(IntegrityError), db_session.begin_nested():
-        db_session.execute(Role.__table__.delete().where(Role.id == referee.id))
+        db_session.execute(delete(Role).where(Role.id == referee.id))
 
 
-def test_user_participates_in_tournaments(db_session: Session):
+def test_user_participates_in_tournaments(db_session: Session) -> None:
     alice = _make_user(db_session, "alice")
     bob = _make_user(db_session, "bob")
     tournament = Tournament(name="Spring Open", association=Association(name="Tennis Club"))
@@ -89,7 +87,7 @@ def test_user_participates_in_tournaments(db_session: Session):
     assert alice.participations[0].registered_at is not None
 
 
-def test_tournament_defaults_to_draft_status(db_session: Session):
+def test_tournament_defaults_to_draft_status(db_session: Session) -> None:
     association = Association(name="Chess Federation")
     tournament = Tournament(name="Winter Open", association=association)
     db_session.add(tournament)
@@ -102,7 +100,7 @@ def test_tournament_defaults_to_draft_status(db_session: Session):
     assert association.tournaments == [tournament]
 
 
-def test_deleting_association_cascades_to_tournaments(db_session: Session):
+def test_deleting_association_cascades_to_tournaments(db_session: Session) -> None:
     association = Association(name="Badminton Club")
     association.tournaments.append(Tournament(name="Cup"))
     db_session.add(association)
