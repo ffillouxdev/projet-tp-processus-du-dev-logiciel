@@ -116,4 +116,44 @@
     --color-dialog-text: #f8fafc;
     --color-dialog-muted: #94a3b8;
   }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) {
+      color-scheme: dark;
+
+      --color-primary: #3b82f6;
+      --color-primary-hover: #2563eb;
+      --color-primary-active: #1d4ed8;
+      --color-primary-foreground: #ffffff;
+
+      --color-secondary: #334155;
+      --color-secondary-hover: #475569;
+      --color-secondary-active: #64748b;
+      --color-secondary-foreground: #f8fafc;
+
+      --color-ghost-hover: #1e293b;
+      --color-ghost-active: #334155;
+      --color-ghost-foreground: #f8fafc;
+
+      --color-danger: #ef4444;
+      --color-danger-hover: #dc2626;
+      --color-danger-active: #b91c1c;
+      --color-danger-foreground: #ffffff;
+
+      --color-btn-group-divider: #475569;
+
+      --color-input-bg: #1e293b;
+      --color-input-border: #334155;
+      --color-input-border-hover: #475569;
+      --color-input-focus: #3b82f6;
+      --color-input-text: #f8fafc;
+      --color-input-placeholder: #64748b;
+
+      --color-dialog-bg: #1e293b;
+      --color-dialog-border: #334155;
+      --color-dialog-overlay: rgba(0, 0, 0, 0.7);
+      --color-dialog-text: #f8fafc;
+      --color-dialog-muted: #94a3b8;
+    }
+  }
 }
