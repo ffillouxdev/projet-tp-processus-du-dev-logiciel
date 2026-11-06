@@ -9,14 +9,16 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import get_db, init_db
+from app.database import get_db
+from app.db import run_migrations
 from app.routers import auth_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    # Initialize database tables on startup
-    init_db()
+    # Bring the schema up to date on startup (tests build their own database)
+    if settings.ENVIRONMENT != "test":
+        run_migrations()
     yield
 
 

@@ -5,14 +5,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import settings
 
-# SQLite requires check_same_thread=False for FastAPI multithreaded requests
-connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
-
-engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args=connect_args,
-    pool_pre_ping=True,
-)
+engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -28,8 +21,3 @@ def get_db() -> Generator[Session]:
         yield db
     finally:
         db.close()
-
-
-def init_db() -> None:
-    """Create all tables in the database."""
-    Base.metadata.create_all(bind=engine)

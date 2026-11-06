@@ -33,3 +33,6 @@ dist/
 *.db
 *.sqlite
 *.sqlite3
+
+# Alembic
+.alembic/
