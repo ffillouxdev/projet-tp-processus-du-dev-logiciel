@@ -62,12 +62,26 @@ BREAKING CHANGE: `start_date` is now an ISO-8601 string
 - `uv run ruff check .` — lint
 - `uv run ruff format --check .` — vérification du format
 - `uv run mypy .` — vérification des types
-- `uv run pytest` — tests
+- `uv run pytest` — tests (PostgreSQL via testcontainers : Docker requis)
+- `make db-up` / `make db-init` / `make db-reset` — base PostgreSQL locale (Docker Compose + Alembic)
+- `uv run alembic revision --autogenerate -m "<message>"` — nouvelle migration (à relire avant commit)
+
+## Database
+PostgreSQL est le seul moteur (dev, tests, CI) ; aucun SQLite. Le schéma est défini
+uniquement par les migrations Alembic de `backend/migrations/versions/` : toute modification
+d'un modèle doit s'accompagner d'une révision réversible (`upgrade` + `downgrade`).
 
 ## CI
-Deux workflows GitHub Actions s'exécutent sur les pull requests vers `main`/`dev` et sont bloquants (toute erreur de lint, de type ou de test échoue) :
+`.github/workflows/backend-ci.yaml` exécute sur push/PR vers `main`/`dev` lorsque `backend/**` change :
+- `lint` — ruff check + format ;
+- `typecheck` — mypy ;
+- `test` — pytest sur PostgreSQL (testcontainers) ;
+- `migrations` — `alembic upgrade head`, `alembic check`, `alembic downgrade base`, puis `upgrade head` sur un service PostgreSQL.
 
-- `.github/workflows/backend-ci.yaml` — lint (ruff), format (ruff), types (mypy) et tests (pytest) lorsque `backend/**` change.
-- `.github/workflows/frontend-ci.yml` — lint (oxlint + ESLint), types (vue-tsc) et tests (vitest).
+`.github/workflows/frontend-ci.yml` exécute sur push/PR vers `main`/`dev` lorsque `frontend/**` change :
+- `lint` — oxlint + ESLint ;
+- `typecheck` — vue-tsc ;
+- `test` — vitest.
 
-Le statut est visible dans la pull request (onglet « Checks »). Le blocage effectif du merge nécessite la protection de branche (`Require status checks to pass`) sur `main` et `dev`.
+## Mettre à jour le README
+Mettre à jour le README lorsqu'il a besoin d'être mis à jour.
