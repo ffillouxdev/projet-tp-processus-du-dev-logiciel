@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.config import settings
 
 
-def test_token_refresh_success(client: TestClient):
+def test_token_refresh_success(client: TestClient) -> None:
     reg = client.post(
         "/auth/register",
         json={"email": "ref@example.com", "username": "refuser", "password": "Password123!"},
@@ -25,7 +25,7 @@ def test_token_refresh_success(client: TestClient):
     assert new_tokens["refresh_token"] != refresh_token
 
 
-def test_token_rotation_and_reuse_detection(client: TestClient):
+def test_token_rotation_and_reuse_detection(client: TestClient) -> None:
     reg = client.post(
         "/auth/register",
         json={"email": "replay@example.com", "username": "replayuser", "password": "Password123!"},
@@ -56,7 +56,7 @@ def test_token_rotation_and_reuse_detection(client: TestClient):
     assert subsequent_attempt.status_code == 401
 
 
-def test_refresh_rejects_access_token(client: TestClient):
+def test_refresh_rejects_access_token(client: TestClient) -> None:
     reg = client.post(
         "/auth/register",
         json={"email": "acc@example.com", "username": "accuser", "password": "Password123!"},
@@ -71,7 +71,7 @@ def test_refresh_rejects_access_token(client: TestClient):
     assert "refresh token required" in response.json()["detail"].lower()
 
 
-def test_refresh_rejects_expired_token(client: TestClient):
+def test_refresh_rejects_expired_token(client: TestClient) -> None:
     # Manually create an already expired token
     now = datetime.now(UTC)
     expired_payload = {
@@ -91,7 +91,7 @@ def test_refresh_rejects_expired_token(client: TestClient):
     assert "expired" in response.json()["detail"].lower()
 
 
-def test_logout_revokes_refresh_token(client: TestClient):
+def test_logout_revokes_refresh_token(client: TestClient) -> None:
     reg = client.post(
         "/auth/register",
         json={"email": "logout@example.com", "username": "logoutuser", "password": "Password123!"},
@@ -113,7 +113,7 @@ def test_logout_revokes_refresh_token(client: TestClient):
     assert refresh_res.status_code == 401
 
 
-def test_logout_all_devices(client: TestClient):
+def test_logout_all_devices(client: TestClient) -> None:
     reg = client.post(
         "/auth/register",
         json={
