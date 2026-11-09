@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { TournamentBracket } from '@/components/tournaments'
-import { UIButton } from '@/components/ui'
+import { UIButton, UIDialog } from '@/components/ui'
 import {
   useAuth,
   useTournaments,
@@ -29,6 +29,7 @@ const bracket = ref(bracketResponse)
 const isJoining = ref(false)
 const isLeaving = ref(false)
 const isStarting = ref(false)
+const isStartDialogOpen = ref(false)
 const registrationError = ref('')
 const startError = ref('')
 const isRegistered = computed(() =>
@@ -75,6 +76,7 @@ async function handleStart(): Promise<void> {
     const response = await startTournament(tournamentId)
     tournament.value.status = response.status
     bracket.value = response.bracket
+    isStartDialogOpen.value = false
   } catch (error) {
     if (
       typeof error === 'object' &&
@@ -148,14 +150,30 @@ function formatDate(date: string | null): string | null {
           </p>
         </div>
         <div v-if="user?.is_superuser && ['draft', 'open'].includes(tournament.status)" class="mt-6">
-          <UIButton variant="primary" :loading="isStarting" @click="handleStart">
+          <UIButton variant="primary" @click="isStartDialogOpen = true">
             Lancer le tournoi
           </UIButton>
-          <p v-if="startError" role="alert" class="mt-3 text-sm font-semibold text-red-100">
-            {{ startError }}
-          </p>
         </div>
       </header>
+
+      <UIDialog
+        v-model="isStartDialogOpen"
+        title="Lancer le tournoi"
+        description="Cette action va démarrer le tournoi et générer son bracket."
+      >
+        <p>Voulez-vous vraiment lancer « {{ tournament.name }} » ?</p>
+        <p v-if="startError" role="alert" class="mt-4 text-sm font-semibold text-danger">
+          {{ startError }}
+        </p>
+        <template #footer="{ close }">
+          <UIButton variant="ghost" :disabled="isStarting" @click="close">
+            Annuler
+          </UIButton>
+          <UIButton variant="primary" :loading="isStarting" @click="handleStart">
+            Confirmer le lancement
+          </UIButton>
+        </template>
+      </UIDialog>
 
       <div class="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <section class="rounded-2xl border border-dialog-border bg-dialog-bg p-6 shadow-sm" aria-labelledby="bracket-title">
