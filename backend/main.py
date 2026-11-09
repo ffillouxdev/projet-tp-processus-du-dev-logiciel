@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.db import run_migrations
-from app.routers import associations_router, auth_router, roles_router
+from app.routers import associations_router, auth_router, roles_router, tournaments_router
 
 
 @asynccontextmanager
@@ -42,6 +42,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(associations_router, prefix="/associations", tags=["Associations"])
 app.include_router(roles_router, prefix="/roles", tags=["Roles"])
+app.include_router(tournaments_router, prefix="/tournaments", tags=["Tournaments"])
 
 
 @app.get("/")

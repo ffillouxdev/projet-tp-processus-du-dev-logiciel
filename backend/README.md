@@ -41,6 +41,19 @@ Gestion des associations organisatrices, du catalogue des rôles et du rattachem
 
 ---
 
+## 🏆 Tournois & Contrôle d'Accès (`/tournaments`)
+
+Gestion des tournois et filtrage serveur selon les droits de l'utilisateur :
+
+- **Consultation & visibilité (`GET /tournaments`, `GET /associations/{association_id}/tournaments`, `GET /tournaments/{tournament_id}`)** :
+  - **Tournois publiés (`open`, `ongoing`, `finished`)** : visibles par tous (authentifiés ou non).
+  - **Tournois protégés (`draft`)** : visibles uniquement par les membres de l'association organisatrice (rôle `member`, `organizer`, `admin`…) et les administrateurs plateforme (`users.is_superuser = true`).
+  - Les filtres d'accès sont appliqués côté serveur aussi bien sur la liste (y compris avec les filtres `?association_id=...` et `?status=...`) que lors d'un accès direct par identifiant (`403 Forbidden` si l'utilisateur n'a pas les droits sur un tournoi protégé, `404 Not Found` si le tournoi n'existe pas).
+- **Administration des tournois (`POST /tournaments`, `PATCH /tournaments/{tournament_id}`, `DELETE /tournaments/{tournament_id}`)** :
+  - Création, modification (ex. publication d'un brouillon `draft` vers `open`) et suppression réservées aux administrateurs plateforme (`is_superuser`) et aux responsables (`organizer` / `admin`) de l'association organisatrice (`401` si non authentifié, `403` sinon).
+
+---
+
 ## 🗄️ Base de données (PostgreSQL + Alembic)
 
 L'ORM utilisé est **SQLAlchemy 2** avec le driver **`psycopg` (v3)**. **PostgreSQL 17 est le seul moteur**, en développement, en test et en CI (SQLite n'est plus utilisé).

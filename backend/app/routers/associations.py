@@ -5,10 +5,16 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
-from app.dependencies import get_current_superuser, require_association_admin
+from app.dependencies import (
+    build_visible_tournaments_stmt,
+    get_current_superuser,
+    get_optional_current_user,
+    require_association_admin,
+)
 from app.models.association import Association
 from app.models.membership import Membership
 from app.models.role import Role
+from app.models.tournament import Tournament
 from app.models.user import User
 from app.schemas.association import (
     AssociationCreate,
@@ -19,6 +25,7 @@ from app.schemas.association import (
     MembershipResponse,
     MembershipRoleUpdate,
 )
+from app.schemas.tournament import TournamentResponse, TournamentStatus
 
 router = APIRouter()
 
@@ -315,3 +322,40 @@ def remove_association_member(
     db.delete(membership)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/{association_id}/tournaments",
+    response_model=list[TournamentResponse],
+    summary="List visible tournaments of an association",
+    description=(
+        "Lists every tournament organized by the association that the current user "
+        "is allowed to see (published tournaments for everyone; draft tournaments "
+        "only for association members and platform administrators)."
+    ),
+)
+def list_association_tournaments(
+    association_id: int,
+    current_user: Annotated[User | None, Depends(get_optional_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    tournament_status: Annotated[
+        TournamentStatus | None,
+        Query(alias="status", description="Optional tournament status filter"),
+    ] = None,
+) -> list[TournamentResponse]:
+    association = db.get(Association, association_id)
+    if association is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Association not found",
+        )
+
+    stmt = build_visible_tournaments_stmt(current_user).where(
+        Tournament.association_id == association_id
+    )
+    if tournament_status is not None:
+        stmt = stmt.where(Tournament.status == tournament_status)
+
+    stmt = stmt.order_by(Tournament.id)
+    tournaments = db.scalars(stmt).all()
+    return [TournamentResponse.model_validate(t) for t in tournaments]
