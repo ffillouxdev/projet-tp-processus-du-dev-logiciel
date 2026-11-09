@@ -8,6 +8,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.association import Association
+    from app.models.match import Match
     from app.models.participant import TournamentParticipant
 
 
@@ -50,4 +51,11 @@ class Tournament(Base):
         back_populates="tournament",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+    matches: Mapped[list[Match]] = relationship(
+        "Match",
+        back_populates="tournament",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="Match.round_number, Match.match_order",
     )

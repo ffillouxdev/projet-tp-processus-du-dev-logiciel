@@ -1,4 +1,5 @@
 from app.models.association import Association
+from app.models.match import Match
 from app.models.membership import Membership
 from app.models.participant import TournamentParticipant
 from app.models.role import Role
@@ -8,6 +9,7 @@ from app.models.user import User
 
 __all__ = [
     "Association",
+    "Match",
     "Membership",
     "RefreshToken",
     "Role",
