@@ -266,7 +266,6 @@ def test_disputed_score_when_players_report_differing_scores(
     chess_club = _association_by_name(db_session, "Avignon Chess Club")
     alice_headers = _login_headers(client, "alice")
     chloe_headers = _login_headers(client, "chloe")
-    admin_headers = _login_headers(client, "admin")
 
     users = [_user_by_username(db_session, u) for u in ("alice", "chloe")]
     tournament = Tournament(
@@ -282,38 +281,80 @@ def test_disputed_score_when_players_report_differing_scores(
 
     start_res = client.post(f"/tournaments/{tournament.id}/start", headers=alice_headers)
     assert start_res.status_code == 200
-    match_id = start_res.json()["bracket"][0]["id"]
+    first_match = start_res.json()["bracket"][0]
+    match_id = first_match["id"]
+    p1_is_alice = first_match["players"][0]["id"] == users[0].id
 
-    # Player 1 claims 2 - 1
+    # Player 1 reports 2 - 1 (from p1's perspective: p1 scored 2, p2 scored 1)
+    p1_headers = alice_headers if p1_is_alice else chloe_headers
+    p2_headers = chloe_headers if p1_is_alice else alice_headers
+
     p1_res = client.patch(
         f"/tournaments/{tournament.id}/matches/{match_id}/score",
         json={"score_player1": 2, "score_player2": 1},
-        headers=alice_headers,
+        headers=p1_headers,
     )
     assert p1_res.status_code == 200
     assert p1_res.json()["status"] == "awaiting_confirmation"
 
-    # Player 2 claims 0 - 3 (different) -> disputed!
+    # Player 2 reports 0 - 3 (different) -> disputed!
     p2_res = client.patch(
         f"/tournaments/{tournament.id}/matches/{match_id}/score",
         json={"score_player1": 0, "score_player2": 3},
-        headers=chloe_headers,
+        headers=p2_headers,
     )
     assert p2_res.status_code == 200
     assert p2_res.json()["status"] == "disputed"
     assert p2_res.json()["winner_id"] is None
 
-    # Organizer/Admin arbitration overrides conflict
-    final_p1_id = start_res.json()["bracket"][0]["players"][0]["id"]
-    admin_res = client.patch(
-        f"/tournaments/{tournament.id}/matches/{match_id}/score",
-        json={"score_player1": 2, "score_player2": 0},
-        headers=admin_headers,
+    # Check alert / dispute listing via GET /tournaments/{id}/disputes (organizer Alice)
+    disputes_res = client.get(
+        f"/tournaments/{tournament.id}/disputes",
+        headers=alice_headers,
     )
-    assert admin_res.status_code == 200
-    assert admin_res.json()["status"] == "completed"
-    assert admin_res.json()["winner_id"] == final_p1_id
-    assert admin_res.json()["tournament_status"] == "finished"
+    assert disputes_res.status_code == 200
+    disputes = disputes_res.json()
+    assert len(disputes) == 1
+    assert disputes[0]["match_id"] == match_id
+    assert disputes[0]["status"] == "disputed"
+    assert disputes[0]["player1_reported_score"] == [2, 1]
+    assert disputes[0]["player2_reported_score"] == [0, 3]
+
+    # Dispute is also visible via GET /tournaments/{id}/bracket?status=disputed
+    bracket_disputed = client.get(
+        f"/tournaments/{tournament.id}/bracket?status=disputed",
+        headers=alice_headers,
+    )
+    assert bracket_disputed.status_code == 200
+    assert len(bracket_disputed.json()) == 1
+    assert bracket_disputed.json()[0]["id"] == match_id
+
+    # Non-organizer cannot view /disputes -> 403
+    disputes_forbidden = client.get(
+        f"/tournaments/{tournament.id}/disputes",
+        headers=chloe_headers,
+    )
+    assert disputes_forbidden.status_code == 403
+
+    # Resolve dispute via explicit POST /resolve-dispute endpoint with reason
+    final_p1_id = start_res.json()["bracket"][0]["players"][0]["id"]
+    resolve_res = client.post(
+        f"/tournaments/{tournament.id}/matches/{match_id}/resolve-dispute",
+        json={"score_player1": 2, "score_player2": 0, "reason": "Arbitrage vidéo"},
+        headers=alice_headers,
+    )
+    assert resolve_res.status_code == 200
+    assert resolve_res.json()["status"] == "completed"
+    assert resolve_res.json()["winner_id"] == final_p1_id
+    assert resolve_res.json()["tournament_status"] == "finished"
+    assert "Arbitrage vidéo" in resolve_res.json()["message"]
+
+    # /disputes is now empty
+    empty_disputes = client.get(
+        f"/tournaments/{tournament.id}/disputes",
+        headers=alice_headers,
+    )
+    assert len(empty_disputes.json()) == 0
 
 
 def test_score_validation_and_permissions(

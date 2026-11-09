@@ -23,6 +23,8 @@ from app.models.user import User
 from app.schemas.match import (
     BracketMatchResponse,
     BracketPlayerResponse,
+    DisputeResolveRequest,
+    DisputeResponse,
     MatchScoreResponse,
     MatchScoreUpdate,
     TournamentStartResponse,
@@ -443,13 +445,18 @@ def start_tournament(
     summary="Get tournament bracket",
     description=(
         "Returns the single elimination bracket matches for the tournament, "
-        "formatted for the frontend SingleEliminationBracket component."
+        "formatted for the frontend SingleEliminationBracket component. "
+        "Can optionally be filtered by match status (e.g., `?status=disputed`)."
     ),
 )
 def get_tournament_bracket(
     tournament_id: int,
     current_user: Annotated[User | None, Depends(get_optional_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    match_status: Annotated[
+        str | None,
+        Query(alias="status", description="Filter by match status"),
+    ] = None,
 ) -> list[BracketMatchResponse]:
     tournament = db.get(Tournament, tournament_id)
     if tournament is None:
@@ -464,13 +471,16 @@ def get_tournament_bracket(
             detail="Not authorized to access this tournament",
         )
 
-    matches = db.scalars(
+    stmt = (
         select(Match)
         .options(selectinload(Match.player1), selectinload(Match.player2))
         .where(Match.tournament_id == tournament.id)
-        .order_by(Match.round_number, Match.match_order)
-    ).all()
+    )
+    if match_status is not None:
+        stmt = stmt.where(func.lower(Match.status) == match_status.strip().lower())
+    stmt = stmt.order_by(Match.round_number, Match.match_order)
 
+    matches = db.scalars(stmt).all()
     return [_serialize_match_to_bracket_match(m) for m in matches]
 
 
@@ -645,6 +655,166 @@ def update_match_score(
         match=_serialize_match_to_bracket_match(refreshed_match),
         tournament_status=tournament.status,
         tournament_winner_id=tournament.winner_id,
+        winner_id=winner_id,
+        advanced_to_next_match=advanced,
+        status=refreshed_match.status,
+    )
+
+
+@router.get(
+    "/{tournament_id}/disputes",
+    response_model=list[DisputeResponse],
+    summary="List disputed matches for a tournament",
+    description=(
+        "Lists every match currently marked as 'disputed' in the tournament. "
+        "Restricted to tournament organizers, association administrators, and platform admins."
+    ),
+)
+def list_tournament_disputes(
+    tournament: Annotated[Tournament, Depends(require_tournament_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[DisputeResponse]:
+    matches = db.scalars(
+        select(Match)
+        .options(selectinload(Match.player1), selectinload(Match.player2))
+        .where(
+            Match.tournament_id == tournament.id,
+            Match.status == "disputed",
+        )
+        .order_by(Match.round_number, Match.match_order)
+    ).all()
+
+    disputes: list[DisputeResponse] = []
+    for m in matches:
+        p1 = m.player1
+        p2 = m.player2
+        p1_resp = BracketPlayerResponse(
+            id=p1.id if p1 else None,
+            name=p1.full_name or p1.username if p1 else "BYE",
+            score=m.score_player1,
+            status="pending",
+        )
+        p2_resp = BracketPlayerResponse(
+            id=p2.id if p2 else None,
+            name=p2.full_name or p2.username if p2 else "BYE",
+            score=m.score_player2,
+            status="pending",
+        )
+        p1_reported = (
+            (m.player1_reported_score_p1, m.player1_reported_score_p2)
+            if m.player1_reported_score_p1 is not None and m.player1_reported_score_p2 is not None
+            else None
+        )
+        p2_reported = (
+            (m.player2_reported_score_p1, m.player2_reported_score_p2)
+            if m.player2_reported_score_p1 is not None and m.player2_reported_score_p2 is not None
+            else None
+        )
+        disputes.append(
+            DisputeResponse(
+                match_id=m.id,
+                tournament_id=tournament.id,
+                round_name=m.round_name,
+                round_number=m.round_number,
+                match_order=m.match_order,
+                player1=p1_resp,
+                player2=p2_resp,
+                player1_reported_score=p1_reported,
+                player2_reported_score=p2_reported,
+                status=m.status,
+            )
+        )
+    return disputes
+
+
+@router.post(
+    "/{tournament_id}/matches/{match_id}/resolve-dispute",
+    response_model=MatchScoreResponse,
+    summary="Arbitrate and resolve a disputed match",
+    description=(
+        "Arbitrates a disputed match by validating the definitive score. "
+        "Marks the match as 'completed', designates the winner, and advances them "
+        "to the next bracket round. "
+        "Restricted to tournament organizers, association administrators, and platform admins."
+    ),
+)
+def resolve_match_dispute(
+    tournament_id: int,
+    match_id: int,
+    resolution: DisputeResolveRequest,
+    _admin: Annotated[Tournament, Depends(require_tournament_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> MatchScoreResponse:
+    tournament = db.get(Tournament, tournament_id)
+    if tournament is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tournament not found",
+        )
+
+    match = db.get(Match, match_id)
+    if match is None or match.tournament_id != tournament.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Match not found in this tournament",
+        )
+
+    if match.player1_id is None or match.player2_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot arbitrate a match with pending players",
+        )
+
+    if resolution.score_player1 < 0 or resolution.score_player2 < 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Scores must be greater than or equal to 0",
+        )
+
+    if resolution.score_player1 == resolution.score_player2:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Ties are not allowed in single elimination matches",
+        )
+
+    # Determine winner
+    winner_id = (
+        match.player1_id
+        if resolution.score_player1 > resolution.score_player2
+        else match.player2_id
+    )
+
+    match.score_player1 = resolution.score_player1
+    match.score_player2 = resolution.score_player2
+    match.winner_id = winner_id
+    match.status = "completed"
+
+    advanced = False
+    if match.next_match_id is not None:
+        next_m = db.get(Match, match.next_match_id)
+        if next_m is not None:
+            if match.match_order % 2 == 0:
+                next_m.player1_id = winner_id
+            else:
+                next_m.player2_id = winner_id
+            advanced = True
+    else:
+        tournament.status = "finished"
+
+    db.commit()
+
+    refreshed_match = db.scalar(
+        select(Match)
+        .options(selectinload(Match.player1), selectinload(Match.player2))
+        .where(Match.id == match.id)
+    )
+    assert refreshed_match is not None
+
+    reason_msg = f" (Reason: {resolution.reason})" if resolution.reason else ""
+    return MatchScoreResponse(
+        message=f"Dispute resolved and match score validated by organizer{reason_msg}",
+        match=_serialize_match_to_bracket_match(refreshed_match),
+        tournament_status=tournament.status,
         winner_id=winner_id,
         advanced_to_next_match=advanced,
         status=refreshed_match.status,
