@@ -52,7 +52,7 @@ Gestion des tournois et filtrage serveur selon les droits de l'utilisateur :
 - **Administration des tournois (`POST /tournaments`, `PATCH /tournaments/{tournament_id}`, `DELETE /tournaments/{tournament_id}`)** :
   - Création, modification (ex. publication d'un brouillon `draft` vers `open`) et suppression réservées aux administrateurs plateforme (`is_superuser`) et aux responsables (`organizer` / `admin`) de l'association organisatrice (`401` si non authentifié, `403` sinon).
 - **Lancement du tournoi & Arbre à élimination directe (`/tournaments/{tournament_id}/start` & `/bracket`)** :
-  - `POST /tournaments/{tournament_id}/start` : lance le tournoi (au moins 2 participants requis), génère aléatoirement l'arbre à élimination directe (gestion des exempts/BYEs) et passe le statut à `ongoing`.
+  - `POST /tournaments/{tournament_id}/start` : lance le tournoi (au moins 2 participants requis), génère aléatoirement l'arbre à élimination directe (exempts/BYEs répartis pour qu'aucun match du 1er tour n'oppose deux BYEs) et passe le statut à `ongoing`.
   - `GET /tournaments/{tournament_id}/bracket` : retourne l'arbre du tournoi formaté pour le composant frontend `SingleEliminationBracket`.
 - **Renseignement du score d'un match (`PATCH /tournaments/{tournament_id}/matches/{match_id}/score`)** :
   - Saisie du score (`score_player1`, `score_player2` entiers $\ge 0$ et sans égalité).

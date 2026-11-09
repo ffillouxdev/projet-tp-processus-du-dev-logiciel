@@ -1,5 +1,6 @@
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -458,3 +459,49 @@ def test_published_tournament_without_matches_has_no_winner(
     detail = client.get(f"/tournaments/{smash.id}").json()
     assert detail["winner_id"] is None
     assert detail["winner"] is None
+
+
+@pytest.mark.parametrize("player_count", [5, 6, 7])
+def test_bracket_with_byes_can_be_played_until_closure(
+    client: TestClient,
+    db_session: Session,
+    player_count: int,
+) -> None:
+    load_demo_data(db_session)
+    alice_headers = _login_headers(client, "alice")
+    usernames = ["alice", "bob", "chloe", "david", "emma"]
+    for idx in range(player_count - len(usernames)):
+        username = f"extra{idx}"
+        db_session.add(
+            User(
+                username=username,
+                email=f"{username}@example.com",
+                hashed_password="not-used",
+            )
+        )
+        usernames.append(username)
+    db_session.flush()
+    tournament, bracket = _start_tournament_with(
+        client, db_session, tuple(usernames), alice_headers
+    )
+
+    # No round-1 match opposes two BYEs
+    for match in (m for m in bracket if m["round_number"] == 1):
+        assert any(p["id"] is not None for p in match["players"]), match
+
+    # Every playable match can be scored until the final closes the tournament
+    for _ in range(len(bracket)):
+        current = client.get(f"/tournaments/{tournament.id}/bracket").json()
+        playable = [
+            m
+            for m in current
+            if m["status"] != "completed" and all(p["id"] is not None for p in m["players"])
+        ]
+        if not playable:
+            break
+        res = _report(client, tournament, playable[0]["id"], alice_headers)
+        assert res.status_code == 200, res.text
+
+    detail = client.get(f"/tournaments/{tournament.id}").json()
+    assert detail["status"] == "finished"
+    assert detail["winner_id"] in {p.id for p in db_session.scalars(select(User))}
