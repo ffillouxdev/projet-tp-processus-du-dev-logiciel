@@ -48,33 +48,41 @@ function formatDate(date: string | null): string | null {
 </script>
 
 <template>
-  <article :class="['rounded-2xl border p-5 shadow-sm transition-transform hover:-translate-y-1', currentStatus.card]">
-    <div class="flex items-start justify-between gap-4">
-      <div class="flex items-center gap-3">
-        <h3 class="text-xl font-bold text-slate-900">{{ tournament.name }}</h3>
+  <RouterLink
+    :to="`/tournaments/${tournament.id}`"
+    :class="[
+      'block rounded-2xl border p-5 shadow-sm transition-transform hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+      currentStatus.card,
+    ]"
+  >
+    <article>
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <h3 class="text-xl font-bold text-slate-900">{{ tournament.name }}</h3>
+        </div>
+        <span :class="['rounded-full px-3 py-1 text-center text-xs font-bold', currentStatus.badge]">
+          {{ currentStatus.label }}
+        </span>
       </div>
-      <span :class="['rounded-full px-3 py-1 text-center text-xs font-bold', currentStatus.badge]">
-        {{ currentStatus.label }}
-      </span>
-    </div>
 
-    <p class="mt-4 text-sm font-medium text-slate-700">
-      {{ currentStatus.message }}
-    </p>
+      <p class="mt-4 text-sm font-medium text-slate-700">
+        {{ currentStatus.message }}
+      </p>
 
-    <p v-if="tournament.description" class="mt-2 text-sm text-slate-600">
-      {{ tournament.description }}
-    </p>
+      <p v-if="tournament.description" class="mt-2 text-sm text-slate-600">
+        {{ tournament.description }}
+      </p>
 
-    <dl class="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
-      <div v-if="formatDate(tournament.start_date)">
-        <dt class="font-bold">Début</dt>
-        <dd>{{ formatDate(tournament.start_date) }}</dd>
-      </div>
-      <div v-if="formatDate(tournament.end_date)">
-        <dt class="font-bold">Fin</dt>
-        <dd>{{ formatDate(tournament.end_date) }}</dd>
-      </div>
-    </dl>
-  </article>
+      <dl class="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
+        <div v-if="formatDate(tournament.start_date)">
+          <dt class="font-bold">Début</dt>
+          <dd>{{ formatDate(tournament.start_date) }}</dd>
+        </div>
+        <div v-if="formatDate(tournament.end_date)">
+          <dt class="font-bold">Fin</dt>
+          <dd>{{ formatDate(tournament.end_date) }}</dd>
+        </div>
+      </dl>
+    </article>
+  </RouterLink>
 </template>

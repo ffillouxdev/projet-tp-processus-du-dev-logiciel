@@ -21,12 +21,19 @@ if (isAuthenticated.value) {
 <template>
   <main class="min-h-screen bg-secondary/30 px-4 py-12 sm:px-6 lg:px-8">
     <div class="mx-auto max-w-6xl">
-      <div class="rounded-3xl bg-gradient-to-r from-blue-600 to-violet-600 p-8 text-white shadow-lg">
+      <div class="rounded-3xl bg-linear-to-r from-blue-600 to-violet-600 p-8 text-white shadow-lg">
         <p class="text-sm font-semibold uppercase tracking-wide text-blue-100">Espace joueur</p>
         <h1 class="mt-2 text-3xl font-black sm:text-4xl">
           Bonjour{{ user?.full_name ? ` ${user.full_name}` : '' }} !
         </h1>
         <p class="mt-2 text-blue-100">Voici vos aventures du moment.</p>
+        <RouterLink
+          v-if="user?.is_superuser"
+          to="/tournaments/create"
+          class="mt-6 inline-flex items-center rounded-lg bg-white px-5 py-3 text-sm font-bold text-blue-700 shadow-sm transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-blue-600"
+        >
+          Créer un tournoi
+        </RouterLink>
       </div>
 
       <section class="mt-8" aria-labelledby="my-tournaments-title">
