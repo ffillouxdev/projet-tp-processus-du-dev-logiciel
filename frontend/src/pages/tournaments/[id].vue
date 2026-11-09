@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { TournamentBracket } from '@/components/tournaments'
-import { UIButton } from '@/components/ui'
+import { UIButton, UIDialog } from '@/components/ui'
 import {
   useAuth,
   useTournaments,
@@ -12,16 +12,26 @@ import {
 
 const route = useRoute('/tournaments/[id]')
 const { user } = useAuth()
-const { fetchTournament, fetchTournamentBracket, joinTournament, leaveTournament } = useTournaments()
+const {
+  fetchTournament,
+  fetchTournamentBracket,
+  joinTournament,
+  leaveTournament,
+  startTournament,
+} = useTournaments()
 const tournamentId = Number(route.params.id)
 const [tournamentResponse, bracketResponse] = await Promise.all([
   fetchTournament(tournamentId),
   fetchTournamentBracket(tournamentId),
 ])
 const tournament = ref(tournamentResponse)
+const bracket = ref(bracketResponse)
 const isJoining = ref(false)
 const isLeaving = ref(false)
+const isStarting = ref(false)
+const isStartDialogOpen = ref(false)
 const registrationError = ref('')
+const startError = ref('')
 const isRegistered = computed(() =>
   tournament.value.participants.some((participant) => participant.user_id === user.value?.id),
 )
@@ -55,6 +65,35 @@ async function handleLeave(): Promise<void> {
       error instanceof Error ? error.message : 'Impossible de quitter ce tournoi.'
   } finally {
     isLeaving.value = false
+  }
+}
+
+async function handleStart(): Promise<void> {
+  isStarting.value = true
+  startError.value = ''
+
+  try {
+    const response = await startTournament(tournamentId)
+    tournament.value.status = response.status
+    bracket.value = response.bracket
+    isStartDialogOpen.value = false
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'data' in error &&
+      typeof error.data === 'object' &&
+      error.data !== null &&
+      'detail' in error.data &&
+      error.data.detail === 'Tournament must have at least 2 participants to be started'
+    ) {
+      startError.value = 'Le tournoi doit avoir au moins deux inscrits pour être lancé.'
+    } else {
+      startError.value =
+        error instanceof Error ? error.message : 'Impossible de lancer ce tournoi.'
+    }
+  } finally {
+    isStarting.value = false
   }
 }
 
@@ -110,12 +149,36 @@ function formatDate(date: string | null): string | null {
             {{ registrationError }}
           </p>
         </div>
+        <div v-if="user?.is_superuser && ['draft', 'open'].includes(tournament.status)" class="mt-6">
+          <UIButton variant="primary" @click="isStartDialogOpen = true">
+            Lancer le tournoi
+          </UIButton>
+        </div>
       </header>
+
+      <UIDialog
+        v-model="isStartDialogOpen"
+        title="Lancer le tournoi"
+        description="Cette action va démarrer le tournoi et générer son bracket."
+      >
+        <p>Voulez-vous vraiment lancer « {{ tournament.name }} » ?</p>
+        <p v-if="startError" role="alert" class="mt-4 text-sm font-semibold text-danger">
+          {{ startError }}
+        </p>
+        <template #footer="{ close }">
+          <UIButton variant="ghost" :disabled="isStarting" @click="close">
+            Annuler
+          </UIButton>
+          <UIButton variant="primary" :loading="isStarting" @click="handleStart">
+            Confirmer le lancement
+          </UIButton>
+        </template>
+      </UIDialog>
 
       <div class="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <section class="rounded-2xl border border-dialog-border bg-dialog-bg p-6 shadow-sm" aria-labelledby="bracket-title">
           <h2 id="bracket-title" class="mb-5 text-2xl font-black text-slate-900">Bracket</h2>
-          <TournamentBracket :matches="bracketResponse" />
+          <TournamentBracket :matches="bracket" />
         </section>
 
         <aside class="space-y-6">

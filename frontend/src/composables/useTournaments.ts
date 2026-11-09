@@ -47,6 +47,15 @@ export interface TournamentBracketMatch {
   next_match_id: number | null
 }
 
+export interface TournamentStartResponse {
+  message: string
+  tournament_id: number
+  status: TournamentStatus
+  total_participants: number
+  total_matches: number
+  bracket: TournamentBracketMatch[]
+}
+
 export interface TournamentDetail extends Tournament {
   association: {
     id: number
@@ -129,11 +138,25 @@ export function useTournaments() {
     })
   }
 
+  async function startTournament(id: number): Promise<TournamentStartResponse> {
+    if (!accessToken.value) {
+      throw new Error('Vous devez être connecté pour lancer ce tournoi.')
+    }
+
+    return api<TournamentStartResponse>(`/tournaments/${id}/start`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + accessToken.value,
+      },
+    })
+  }
+
   return {
     fetchVisibleTournaments,
     fetchTournament,
     fetchTournamentBracket,
     joinTournament,
     leaveTournament,
+    startTournament,
   }
 }
