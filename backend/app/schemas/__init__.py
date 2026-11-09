@@ -9,6 +9,11 @@ from app.schemas.association import (
     MemberUserSummary,
     UserMembershipResponse,
 )
+from app.schemas.match import (
+    BracketMatchResponse,
+    BracketPlayerResponse,
+    TournamentStartResponse,
+)
 from app.schemas.role import (
     RoleCreate,
     RoleResponse,
@@ -44,6 +49,8 @@ __all__ = [
     "AssociationResponse",
     "AssociationUpdate",
     "AuthResponse",
+    "BracketMatchResponse",
+    "BracketPlayerResponse",
     "ChangePasswordRequest",
     "LoginRequest",
     "MemberUserSummary",
@@ -61,6 +68,7 @@ __all__ = [
     "TournamentDetailResponse",
     "TournamentParticipantResponse",
     "TournamentResponse",
+    "TournamentStartResponse",
     "TournamentStatus",
     "TournamentUpdate",
     "UserBase",

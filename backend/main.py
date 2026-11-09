@@ -11,7 +11,12 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.db import run_migrations
-from app.routers import associations_router, auth_router, roles_router, tournaments_router
+from app.routers import (
+    associations_router,
+    auth_router,
+    roles_router,
+    tournaments_router,
+)
 
 
 @asynccontextmanager

@@ -1,14 +1,13 @@
 import os
+import shutil
+import sqlite3
+import subprocess
+from collections.abc import Generator
+from datetime import UTC, datetime
+from typing import Any
 
 # Must be set before the app is imported: disables automatic migrations in the lifespan
 os.environ["ENVIRONMENT"] = "test"
-
-import shutil  # noqa: E402
-import sqlite3  # noqa: E402
-import subprocess  # noqa: E402
-from collections.abc import Generator  # noqa: E402
-from datetime import UTC, datetime  # noqa: E402
-from typing import Any  # noqa: E402
 
 import pytest  # noqa: E402
 from alembic import command  # noqa: E402

@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
@@ -13,9 +13,11 @@ from app.dependencies import (
     require_association_admin,
     require_tournament_admin,
 )
+from app.models.match import Match
 from app.models.participant import TournamentParticipant
 from app.models.tournament import Tournament
 from app.models.user import User
+from app.schemas.match import BracketMatchResponse, BracketPlayerResponse, TournamentStartResponse
 from app.schemas.tournament import (
     TournamentCreate,
     TournamentDetailResponse,
@@ -23,6 +25,7 @@ from app.schemas.tournament import (
     TournamentStatus,
     TournamentUpdate,
 )
+from app.services.bracket import generate_single_elimination_bracket
 
 router = APIRouter()
 
@@ -193,3 +196,152 @@ def delete_tournament(
     db.delete(tournament)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _serialize_match_to_bracket_match(match: Match) -> BracketMatchResponse:
+    """Helper to convert a Match database model into a frontend-compatible BracketMatchResponse."""
+    p1 = match.player1
+    p2 = match.player2
+
+    def _player_status(player: User | None) -> Literal["winner", "loser", "pending"]:
+        if player is None:
+            return "loser" if match.status == "completed" else "pending"
+        if match.winner_id is not None:
+            return "winner" if match.winner_id == player.id else "loser"
+        return "pending"
+
+    p1_resp = BracketPlayerResponse(
+        id=p1.id if p1 else None,
+        name=p1.full_name or p1.username if p1 else "BYE",
+        score=match.score_player1,
+        status=_player_status(p1),
+    )
+    p2_resp = BracketPlayerResponse(
+        id=p2.id if p2 else None,
+        name=p2.full_name or p2.username if p2 else "BYE",
+        score=match.score_player2,
+        status=_player_status(p2),
+    )
+
+    return BracketMatchResponse(
+        id=match.id,
+        round=match.round_name,
+        round_number=match.round_number,
+        match_order=match.match_order,
+        players=(p1_resp, p2_resp),
+        winner_id=match.winner_id,
+        status=match.status,
+        next_match_id=match.next_match_id,
+    )
+
+
+@router.post(
+    "/{tournament_id}/start",
+    response_model=TournamentStartResponse,
+    summary="Start a tournament and generate its bracket",
+    description=(
+        "Launches the tournament: verifies participants, randomly generates the initial single "
+        "elimination bracket with byes if necessary, updates status to ongoing, and returns "
+        "the generated bracket. Restricted to tournament organizers and platform administrators."
+    ),
+)
+def start_tournament(
+    tournament: Annotated[Tournament, Depends(require_tournament_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> TournamentStartResponse:
+    if tournament.status == "ongoing":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Tournament is already ongoing",
+        )
+    if tournament.status == "finished":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot start a finished tournament",
+        )
+
+    # Retrieve registered participants
+    stmt = (
+        select(User)
+        .join(TournamentParticipant, TournamentParticipant.user_id == User.id)
+        .where(TournamentParticipant.tournament_id == tournament.id)
+        .order_by(TournamentParticipant.registered_at)
+    )
+    participants = db.scalars(stmt).all()
+
+    if len(participants) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tournament must have at least 2 participants to be started",
+        )
+
+    # Clear any previous matches if re-starting from draft
+    for existing_match in tournament.matches:
+        db.delete(existing_match)
+    db.flush()
+
+    # Generate the single elimination bracket
+    matches = generate_single_elimination_bracket(
+        db=db,
+        tournament=tournament,
+        participant_users=participants,
+    )
+
+    tournament.status = "ongoing"
+    db.commit()
+
+    # Refresh matches with relations for serialization
+    refreshed_matches = db.scalars(
+        select(Match)
+        .options(selectinload(Match.player1), selectinload(Match.player2))
+        .where(Match.tournament_id == tournament.id)
+        .order_by(Match.round_number, Match.match_order)
+    ).all()
+
+    bracket = [_serialize_match_to_bracket_match(m) for m in refreshed_matches]
+
+    return TournamentStartResponse(
+        message="Tournament started successfully and bracket generated",
+        tournament_id=tournament.id,
+        status=tournament.status,
+        total_participants=len(participants),
+        total_matches=len(matches),
+        bracket=bracket,
+    )
+
+
+@router.get(
+    "/{tournament_id}/bracket",
+    response_model=list[BracketMatchResponse],
+    summary="Get tournament bracket",
+    description=(
+        "Returns the single elimination bracket matches for the tournament, "
+        "formatted for the frontend SingleEliminationBracket component."
+    ),
+)
+def get_tournament_bracket(
+    tournament_id: int,
+    current_user: Annotated[User | None, Depends(get_optional_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[BracketMatchResponse]:
+    tournament = db.get(Tournament, tournament_id)
+    if tournament is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tournament not found",
+        )
+
+    if not can_user_view_tournament(db, tournament, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this tournament",
+        )
+
+    matches = db.scalars(
+        select(Match)
+        .options(selectinload(Match.player1), selectinload(Match.player2))
+        .where(Match.tournament_id == tournament.id)
+        .order_by(Match.round_number, Match.match_order)
+    ).all()
+
+    return [_serialize_match_to_bracket_match(m) for m in matches]
