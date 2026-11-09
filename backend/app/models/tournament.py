@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from app.models.association import Association
     from app.models.match import Match
     from app.models.participant import TournamentParticipant
+    from app.models.user import User
 
 
 class Tournament(Base):
@@ -33,6 +34,12 @@ class Tournament(Base):
         nullable=False,
         index=True,
     )
+    winner_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -46,6 +53,7 @@ class Tournament(Base):
     )
 
     association: Mapped[Association] = relationship("Association", back_populates="tournaments")
+    winner: Mapped[User | None] = relationship("User", foreign_keys=[winner_id])
     participants: Mapped[list[TournamentParticipant]] = relationship(
         "TournamentParticipant",
         back_populates="tournament",

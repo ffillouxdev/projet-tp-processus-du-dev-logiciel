@@ -34,7 +34,10 @@ def generate_single_elimination_bracket(
 
     - The participants are shuffled randomly.
     - If the number of participants N is not a power of 2, the bracket is padded to the
-      next power of 2 with BYEs (exempts).
+      next power of 2 with BYEs (exempts). BYEs are spread so that a round-1 match never
+      opposes two BYEs (each match gets a real player1, BYEs only fill player2 slots);
+      otherwise the next-round match would wait forever for an opponent and the
+      tournament could never be closed.
     - In round 1, if a real player faces a BYE (player2 is None), the real player
       is automatically declared winner and advances to round 2.
     - All future rounds' match nodes are created and connected via ``next_match_id``.
@@ -51,8 +54,14 @@ def generate_single_elimination_bracket(
     shuffled_participants = list(participant_users)
     random.shuffle(shuffled_participants)
 
-    # Pad with None for BYEs
-    seeds: list[User | None] = list(shuffled_participants) + [None] * (bracket_size - n)
+    # Spread BYEs: player1 of every round-1 match is a real participant (n > bracket_size / 2),
+    # remaining participants fill player2 slots and leftover slots become BYEs.
+    first_round_count = bracket_size // 2
+    seeds: list[User | None] = []
+    for idx in range(first_round_count):
+        seeds.append(shuffled_participants[idx])
+        opponent_idx = first_round_count + idx
+        seeds.append(shuffled_participants[opponent_idx] if opponent_idx < n else None)
 
     # Create match placeholders for all rounds
     matches_by_round: list[list[Match]] = []

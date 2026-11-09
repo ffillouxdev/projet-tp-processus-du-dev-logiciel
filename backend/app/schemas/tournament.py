@@ -70,6 +70,7 @@ class TournamentResponse(BaseModel):
     start_date: datetime | None
     end_date: datetime | None
     association_id: int
+    winner_id: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -78,4 +79,5 @@ class TournamentResponse(BaseModel):
 
 class TournamentDetailResponse(TournamentResponse):
     association: AssociationResponse
+    winner: MemberUserSummary | None = None
     participants: list[TournamentParticipantResponse] = Field(default_factory=list)

@@ -52,14 +52,19 @@ Gestion des tournois et filtrage serveur selon les droits de l'utilisateur :
 - **Administration des tournois (`POST /tournaments`, `PATCH /tournaments/{tournament_id}`, `DELETE /tournaments/{tournament_id}`)** :
   - Création, modification (ex. publication d'un brouillon `draft` vers `open`) et suppression réservées aux administrateurs plateforme (`is_superuser`) et aux responsables (`organizer` / `admin`) de l'association organisatrice (`401` si non authentifié, `403` sinon).
 - **Lancement du tournoi & Arbre à élimination directe (`/tournaments/{tournament_id}/start` & `/bracket`)** :
-  - `POST /tournaments/{tournament_id}/start` : lance le tournoi (au moins 2 participants requis), génère aléatoirement l'arbre à élimination directe (gestion des exempts/BYEs) et passe le statut à `ongoing`.
+  - `POST /tournaments/{tournament_id}/start` : lance le tournoi (au moins 2 participants requis), génère aléatoirement l'arbre à élimination directe (exempts/BYEs répartis pour qu'aucun match du 1er tour n'oppose deux BYEs) et passe le statut à `ongoing`.
   - `GET /tournaments/{tournament_id}/bracket` : retourne l'arbre du tournoi formaté pour le composant frontend `SingleEliminationBracket`.
 - **Renseignement et validation des scores (`PATCH /tournaments/{tournament_id}/matches/{match_id}/score`)** :
   - Saisie du score (`score_player1`, `score_player2` entiers $\ge 0$ et sans égalité).
+  - Autorisé pour les **joueurs du match**, les responsables de l'association (`organizer`/`admin`) et les superusers.
   - **Validation par double saisie (consensus)** : lorsqu'un joueur saisit le résultat, le match passe en attente de confirmation (`awaiting_confirmation`). Dès que le 2e joueur saisit un score identique, le match est validé (`completed`), et le gagnant avance automatiquement au tour suivant (`next_match_id`).
   - **Gestion des litiges** : si les deux joueurs rapportent des scores divergents, le statut du match passe à `disputed`.
   - **Arbitrage organisateur / admin** : les organisateurs de l'association et superusers peuvent valider/arbitrer directement le résultat d'un match.
-  - **Finalisation du tournoi** : lorsque la finale est validée, le statut du tournoi passe automatiquement à `finished`.
+  - Saisie possible uniquement tant que le tournoi est `ongoing` (`409 Conflict` sinon) : les résultats d'un tournoi clôturé sont figés.
+- **Clôture de l'événement** :
+  - La validation de la finale (consensus des deux joueurs ou arbitrage organisateur) passe automatiquement le tournoi au statut `finished` et enregistre son vainqueur (`tournaments.winner_id`).
+  - Le vainqueur est exposé par `GET /tournaments` et `GET /associations/{association_id}/tournaments` (`winner_id`), par `GET /tournaments/{tournament_id}` (`winner` : `id`, `username`, `full_name`) et par la réponse de saisie du score (`tournament_winner_id`).
+  - Repasser un tournoi `finished` à un autre statut via `PATCH /tournaments/{tournament_id}` efface son vainqueur.
 - **Inscription à un tournoi (`POST /tournaments/{tournament_id}/participants`)** :
   - Le lien public d'un tournoi est son URL `/tournaments/{tournament_id}` ; tout utilisateur authentifié et actif peut s'y inscrire (`201 Created`, renvoie l'inscription).
   - Refus : `401` si non authentifié, `403` si compte inactif ou brouillon non visible, `404` si le tournoi n'existe pas, `409 Conflict` si les inscriptions ne sont pas ouvertes (statut différent de `open`), si l'utilisateur est déjà inscrit ou si `max_participants` est atteint.
@@ -80,6 +85,7 @@ Le schéma est défini **uniquement par les migrations versionnées [Alembic](ht
 | `0002_associations_roles_tournaments` | `associations`, `roles`, `memberships` (utilisateur ↔ association avec un rôle), `tournaments`, `tournament_participants` (utilisateur ↔ tournoi) |
 | `0003_add_matches_table` | `matches` (arbre de tournoi à élimination directe, rounds et vainqueurs) |
 | `0004_add_match_score_reports` | `matches` (scores rapportés par joueur 1 et joueur 2 pour confirmation du résultat, gestion des statuts `awaiting_confirmation` et `disputed`) |
+| `0005_add_tournament_winner` | colonne `tournaments.winner_id` (vainqueur du tournoi, renseigné à la validation de la finale) |
 
 ![MCD du schéma](../docs/mcd.svg)
 
