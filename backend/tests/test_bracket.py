@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -317,3 +319,142 @@ def test_score_validation_and_permissions(
     assert res_valid.status_code == 200
     assert res_valid.json()["advanced_to_next_match"] is True
     assert res_valid.json()["winner_id"] == p1_id
+
+
+# ---------------------------------------------------------------------------
+# Closing the event (US-204)
+# ---------------------------------------------------------------------------
+
+
+def _start_tournament_with(
+    client: TestClient,
+    db_session: Session,
+    usernames: tuple[str, ...],
+    headers: dict[str, str],
+) -> tuple[Tournament, list[dict[str, Any]]]:
+    chess_club = _association_by_name(db_session, "Avignon Chess Club")
+    tournament = Tournament(
+        name=f"Tournoi Clôture {len(usernames)}",
+        association_id=chess_club.id,
+        status="open",
+    )
+    db_session.add(tournament)
+    db_session.flush()
+    for username in usernames:
+        user = _user_by_username(db_session, username)
+        db_session.add(TournamentParticipant(tournament_id=tournament.id, user_id=user.id))
+    db_session.commit()
+
+    res = client.post(f"/tournaments/{tournament.id}/start", headers=headers)
+    assert res.status_code == 200, res.text
+    return tournament, res.json()["bracket"]
+
+
+def _report(
+    client: TestClient,
+    tournament: Tournament,
+    match_id: int,
+    headers: dict[str, str],
+    scores: tuple[int, int] = (2, 1),
+) -> Any:
+    return client.patch(
+        f"/tournaments/{tournament.id}/matches/{match_id}/score",
+        json={"score_player1": scores[0], "score_player2": scores[1]},
+        headers=headers,
+    )
+
+
+def test_validating_the_final_closes_tournament_and_exposes_winner(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    alice_headers = _login_headers(client, "alice")
+    tournament, bracket = _start_tournament_with(
+        client, db_session, ("alice", "chloe", "david", "emma"), alice_headers
+    )
+    semis = [m for m in bracket if m["round_number"] == 1]
+    final = next(m for m in bracket if m["round_number"] == 2)
+
+    # Semi-finals do not close the tournament
+    for semi in semis:
+        res = _report(client, tournament, semi["id"], alice_headers)
+        assert res.status_code == 200
+        assert res.json()["tournament_status"] == "ongoing"
+        assert res.json()["tournament_winner_id"] is None
+
+    detail = client.get(f"/tournaments/{tournament.id}").json()
+    assert detail["status"] == "ongoing"
+    assert detail["winner_id"] is None
+    assert detail["winner"] is None
+
+    # The final (player2 wins) closes the tournament
+    res = _report(client, tournament, final["id"], alice_headers, scores=(0, 3))
+    assert res.status_code == 200
+    champion_id = semis[1]["players"][0]["id"]
+    assert res.json()["tournament_status"] == "finished"
+    assert res.json()["winner_id"] == champion_id
+    assert res.json()["tournament_winner_id"] == champion_id
+
+    # The winner is shown publicly, in the detail and in the list
+    detail = client.get(f"/tournaments/{tournament.id}").json()
+    assert detail["status"] == "finished"
+    assert detail["winner_id"] == champion_id
+    assert detail["winner"]["id"] == champion_id
+    assert detail["winner"]["username"]
+
+    listed = client.get("/tournaments", params={"status": "finished"}).json()
+    assert next(t for t in listed if t["id"] == tournament.id)["winner_id"] == champion_id
+
+
+def test_finished_tournament_results_are_locked(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    alice_headers = _login_headers(client, "alice")
+    tournament, bracket = _start_tournament_with(
+        client, db_session, ("alice", "chloe"), alice_headers
+    )
+    final = bracket[0]
+    assert _report(client, tournament, final["id"], alice_headers).status_code == 200
+
+    # Rewriting the final score after closure is refused, winner unchanged
+    res = _report(client, tournament, final["id"], alice_headers, scores=(0, 5))
+    assert res.status_code == 409
+    assert res.json()["detail"] == "Scores can only be recorded while the tournament is ongoing"
+    detail = client.get(f"/tournaments/{tournament.id}").json()
+    assert detail["winner_id"] == final["players"][0]["id"]
+
+
+def test_reopening_a_finished_tournament_clears_its_winner(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    alice_headers = _login_headers(client, "alice")
+    tournament, bracket = _start_tournament_with(
+        client, db_session, ("alice", "chloe"), alice_headers
+    )
+    assert _report(client, tournament, bracket[0]["id"], alice_headers).status_code == 200
+
+    res = client.patch(
+        f"/tournaments/{tournament.id}", json={"status": "ongoing"}, headers=alice_headers
+    )
+    assert res.status_code == 200
+    assert res.json()["status"] == "ongoing"
+    assert res.json()["winner_id"] is None
+
+
+def test_published_tournament_without_matches_has_no_winner(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    smash = db_session.scalars(
+        select(Tournament).where(Tournament.name == "Ligue Smash Bros")
+    ).one()
+
+    detail = client.get(f"/tournaments/{smash.id}").json()
+    assert detail["winner_id"] is None
+    assert detail["winner"] is None

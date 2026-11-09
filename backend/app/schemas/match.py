@@ -43,5 +43,6 @@ class MatchScoreResponse(BaseModel):
     message: str
     match: BracketMatchResponse
     tournament_status: str
+    tournament_winner_id: int | None = None
     winner_id: int
     advanced_to_next_match: bool

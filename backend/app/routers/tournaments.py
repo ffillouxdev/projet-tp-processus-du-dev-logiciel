@@ -128,6 +128,7 @@ def get_tournament(
         select(Tournament)
         .options(
             selectinload(Tournament.association),
+            selectinload(Tournament.winner),
             selectinload(Tournament.participants).selectinload(TournamentParticipant.user),
         )
         .where(Tournament.id == tournament_id)
@@ -168,6 +169,9 @@ def update_tournament(
         tournament.description = tournament_update.description
     if tournament_update.status is not None:
         tournament.status = tournament_update.status
+        if tournament.status != "finished":
+            # Reopening a closed tournament invalidates its winner.
+            tournament.winner_id = None
     if "max_participants" in tournament_update.model_fields_set:
         tournament.max_participants = tournament_update.max_participants
     if "start_date" in tournament_update.model_fields_set:
@@ -507,6 +511,13 @@ def update_match_score(
             detail="You are not authorized to record the score for this match",
         )
 
+    # A closed tournament is final: its results can no longer change.
+    if tournament.status != "ongoing":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Scores can only be recorded while the tournament is ongoing",
+        )
+
     # Validation: both players must be known
     if match.player1_id is None or match.player2_id is None:
         raise HTTPException(
@@ -551,8 +562,9 @@ def update_match_score(
                 next_match.player2_id = winner_id
             advanced = True
     else:
-        # Finale: no next_match_id -> tournament is finished!
+        # Final validated: close the tournament and record its winner.
         tournament.status = "finished"
+        tournament.winner_id = winner_id
 
     db.commit()
 
@@ -568,6 +580,7 @@ def update_match_score(
         message="Match score recorded successfully",
         match=_serialize_match_to_bracket_match(refreshed_match),
         tournament_status=tournament.status,
+        tournament_winner_id=tournament.winner_id,
         winner_id=winner_id,
         advanced_to_next_match=advanced,
     )

@@ -58,7 +58,11 @@ Gestion des tournois et filtrage serveur selon les droits de l'utilisateur :
   - Saisie du score (`score_player1`, `score_player2` entiers $\ge 0$ et sans égalité).
   - Autorisé pour les **joueurs du match**, les responsables de l'association (`organizer`/`admin`) et les superusers.
   - Avancement automatique du vainqueur vers le tour suivant (`next_match_id`).
-  - Passage automatique du tournoi au statut `finished` lors de la validation du score de la finale.
+  - Saisie possible uniquement tant que le tournoi est `ongoing` (`409 Conflict` sinon) : les résultats d'un tournoi clôturé sont figés.
+- **Clôture de l'événement** :
+  - La validation du score de la finale passe automatiquement le tournoi au statut `finished` et enregistre son vainqueur (`tournaments.winner_id`).
+  - Le vainqueur est exposé par `GET /tournaments` et `GET /associations/{association_id}/tournaments` (`winner_id`), par `GET /tournaments/{tournament_id}` (`winner` : `id`, `username`, `full_name`) et par la réponse de saisie du score (`tournament_winner_id`).
+  - Repasser un tournoi `finished` à un autre statut via `PATCH /tournaments/{tournament_id}` efface son vainqueur.
 - **Inscription à un tournoi (`POST /tournaments/{tournament_id}/participants`)** :
   - Le lien public d'un tournoi est son URL `/tournaments/{tournament_id}` ; tout utilisateur authentifié et actif peut s'y inscrire (`201 Created`, renvoie l'inscription).
   - Refus : `401` si non authentifié, `403` si compte inactif ou brouillon non visible, `404` si le tournoi n'existe pas, `409 Conflict` si les inscriptions ne sont pas ouvertes (statut différent de `open`), si l'utilisateur est déjà inscrit ou si `max_participants` est atteint.
@@ -78,6 +82,7 @@ Le schéma est défini **uniquement par les migrations versionnées [Alembic](ht
 | `0001_initial_schema` | `users`, `refresh_tokens` |
 | `0002_associations_roles_tournaments` | `associations`, `roles`, `memberships` (utilisateur ↔ association avec un rôle), `tournaments`, `tournament_participants` (utilisateur ↔ tournoi) |
 | `0003_add_matches_table` | `matches` (arbre de tournoi à élimination directe, rounds et vainqueurs) |
+| `0004_add_tournament_winner` | colonne `tournaments.winner_id` (vainqueur du tournoi, renseigné à la validation de la finale) |
 
 ![MCD du schéma](../docs/mcd.svg)
 
