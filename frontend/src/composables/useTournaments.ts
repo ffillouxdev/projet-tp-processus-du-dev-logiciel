@@ -103,9 +103,37 @@ export function useTournaments() {
     })
   }
 
+  async function joinTournament(id: number): Promise<TournamentParticipant> {
+    if (!accessToken.value) {
+      throw new Error('Vous devez être connecté pour rejoindre ce tournoi.')
+    }
+
+    return api<TournamentParticipant>(`/tournaments/${id}/participants`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + accessToken.value,
+      },
+    })
+  }
+
+  async function leaveTournament(id: number): Promise<void> {
+    if (!accessToken.value) {
+      throw new Error('Vous devez être connecté pour quitter ce tournoi.')
+    }
+
+    await api(`/tournaments/${id}/participants/me`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: 'Bearer ' + accessToken.value,
+      },
+    })
+  }
+
   return {
     fetchVisibleTournaments,
     fetchTournament,
     fetchTournamentBracket,
+    joinTournament,
+    leaveTournament,
   }
 }

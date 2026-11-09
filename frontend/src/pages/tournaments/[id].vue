@@ -1,15 +1,62 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { TournamentBracket } from '@/components/tournaments'
-import { useTournaments, type TournamentStatus } from '@/composables'
+import { UIButton } from '@/components/ui'
+import {
+  useAuth,
+  useTournaments,
+  type TournamentStatus,
+  type TournamentParticipant,
+} from '@/composables'
 
 const route = useRoute('/tournaments/[id]')
-const { fetchTournament, fetchTournamentBracket } = useTournaments()
+const { user } = useAuth()
+const { fetchTournament, fetchTournamentBracket, joinTournament, leaveTournament } = useTournaments()
 const tournamentId = Number(route.params.id)
-const [tournament, bracketResponse] = await Promise.all([
+const [tournamentResponse, bracketResponse] = await Promise.all([
   fetchTournament(tournamentId),
   fetchTournamentBracket(tournamentId),
 ])
+const tournament = ref(tournamentResponse)
+const isJoining = ref(false)
+const isLeaving = ref(false)
+const registrationError = ref('')
+const isRegistered = computed(() =>
+  tournament.value.participants.some((participant) => participant.user_id === user.value?.id),
+)
+
+async function handleJoin(): Promise<void> {
+  isJoining.value = true
+  registrationError.value = ''
+
+  try {
+    const participant: TournamentParticipant = await joinTournament(tournamentId)
+    tournament.value.participants.push(participant)
+  } catch (error) {
+    registrationError.value =
+      error instanceof Error ? error.message : 'Impossible de rejoindre ce tournoi.'
+  } finally {
+    isJoining.value = false
+  }
+}
+
+async function handleLeave(): Promise<void> {
+  isLeaving.value = true
+  registrationError.value = ''
+
+  try {
+    await leaveTournament(tournamentId)
+    tournament.value.participants = tournament.value.participants.filter(
+      (participant) => participant.user_id !== user.value?.id,
+    )
+  } catch (error) {
+    registrationError.value =
+      error instanceof Error ? error.message : 'Impossible de quitter ce tournoi.'
+  } finally {
+    isLeaving.value = false
+  }
+}
 
 const statusContent: Record<TournamentStatus, { label: string; color: string }> = {
   draft: { label: 'Bientôt disponible', color: 'bg-amber-100 text-amber-800' },
@@ -47,6 +94,22 @@ function formatDate(date: string | null): string | null {
         <p v-if="tournament.description" class="mt-5 max-w-2xl text-blue-50">
           {{ tournament.description }}
         </p>
+        <div v-if="tournament.status === 'open'" class="mt-6">
+          <div v-if="!isRegistered" class="flex flex-wrap gap-3">
+            <UIButton variant="secondary" :loading="isJoining" @click="handleJoin">
+              Rejoindre le tournoi
+            </UIButton>
+          </div>
+          <div v-else class="flex flex-wrap items-center gap-3">
+            <p class="text-sm font-semibold text-blue-100">Vous participez à ce tournoi.</p>
+            <UIButton variant="danger" :loading="isLeaving" @click="handleLeave">
+              Quitter le tournoi
+            </UIButton>
+          </div>
+          <p v-if="registrationError" role="alert" class="mt-3 text-sm font-semibold text-red-100">
+            {{ registrationError }}
+          </p>
+        </div>
       </header>
 
       <div class="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
