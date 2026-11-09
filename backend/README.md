@@ -59,6 +59,12 @@ Gestion des tournois et filtrage serveur selon les droits de l'utilisateur :
   - Autorisé pour les **joueurs du match**, les responsables de l'association (`organizer`/`admin`) et les superusers.
   - Avancement automatique du vainqueur vers le tour suivant (`next_match_id`).
   - Passage automatique du tournoi au statut `finished` lors de la validation du score de la finale.
+- **Inscription à un tournoi (`POST /tournaments/{tournament_id}/participants`)** :
+  - Le lien public d'un tournoi est son URL `/tournaments/{tournament_id}` ; tout utilisateur authentifié et actif peut s'y inscrire (`201 Created`, renvoie l'inscription).
+  - Refus : `401` si non authentifié, `403` si compte inactif ou brouillon non visible, `404` si le tournoi n'existe pas, `409 Conflict` si les inscriptions ne sont pas ouvertes (statut différent de `open`), si l'utilisateur est déjà inscrit ou si `max_participants` est atteint.
+- **Désinscription (`DELETE /tournaments/{tournament_id}/participants/me`)** :
+  - L'utilisateur authentifié annule sa propre inscription tant que le tournoi est `open` (`204 No Content`).
+  - Refus : `401` si non authentifié, `403` si compte inactif ou brouillon non visible, `404` si le tournoi n'existe pas ou si l'utilisateur n'y est pas inscrit, `409 Conflict` si les inscriptions ne sont plus ouvertes (tournoi lancé ou terminé).
 
 ---
 
