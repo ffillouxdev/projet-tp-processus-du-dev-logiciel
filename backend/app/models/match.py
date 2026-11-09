@@ -48,8 +48,14 @@ class Match(Base):
 
     score_player1: Mapped[int | None] = mapped_column(Integer, nullable=True)
     score_player2: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    player1_reported_score_p1: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    player1_reported_score_p2: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    player2_reported_score_p1: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    player2_reported_score_p2: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     status: Mapped[str] = mapped_column(
-        String(20),
+        String(30),
         default="pending",
         server_default="pending",
         nullable=False,

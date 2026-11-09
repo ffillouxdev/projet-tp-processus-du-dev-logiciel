@@ -21,6 +21,8 @@ class BracketMatchResponse(BaseModel):
     winner_id: int | None = None
     status: str = "pending"
     next_match_id: int | None = None
+    player1_reported_score: tuple[int, int] | None = None
+    player2_reported_score: tuple[int, int] | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -44,5 +46,6 @@ class MatchScoreResponse(BaseModel):
     match: BracketMatchResponse
     tournament_status: str
     tournament_winner_id: int | None = None
-    winner_id: int
+    winner_id: int | None = None
     advanced_to_next_match: bool
+    status: str

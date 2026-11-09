@@ -331,6 +331,23 @@ def _serialize_match_to_bracket_match(match: Match) -> BracketMatchResponse:
         status=_player_status(p2),
     )
 
+    p1_reported = (
+        (match.player1_reported_score_p1, match.player1_reported_score_p2)
+        if (
+            match.player1_reported_score_p1 is not None
+            and match.player1_reported_score_p2 is not None
+        )
+        else None
+    )
+    p2_reported = (
+        (match.player2_reported_score_p1, match.player2_reported_score_p2)
+        if (
+            match.player2_reported_score_p1 is not None
+            and match.player2_reported_score_p2 is not None
+        )
+        else None
+    )
+
     return BracketMatchResponse(
         id=match.id,
         round=match.round_name,
@@ -340,6 +357,8 @@ def _serialize_match_to_bracket_match(match: Match) -> BracketMatchResponse:
         winner_id=match.winner_id,
         status=match.status,
         next_match_id=match.next_match_id,
+        player1_reported_score=p1_reported,
+        player2_reported_score=p2_reported,
     )
 
 
@@ -460,10 +479,10 @@ def get_tournament_bracket(
     response_model=MatchScoreResponse,
     summary="Record or update the score of a match",
     description=(
-        "Records the final score of a match, designates the winner, and advances "
-        "them to the next bracket round if available. If the completed match is the final, "
-        "the tournament status is updated to 'finished'. "
-        "Allowed for the 2 match players, organizers/admins, and platform administrators."
+        "Records the score of a match. When recorded by a player, the result is confirmed "
+        "and advances only once both players have submitted identical scores. "
+        "If scores differ, the match is marked as 'disputed'. "
+        "Organizers and platform administrators can directly validate/arbitrate the match."
     ),
 )
 def update_match_score(
@@ -539,36 +558,81 @@ def update_match_score(
             detail="Ties are not allowed in single elimination matches",
         )
 
-    # Determine winner
-    winner_id = (
-        match.player1_id
-        if score_data.score_player1 > score_data.score_player2
-        else match.player2_id
-    )
+    def _apply_completed_score(s1: int, s2: int) -> tuple[int, bool]:
+        winner = match.player1_id if s1 > s2 else match.player2_id
+        assert winner is not None
+        match.score_player1 = s1
+        match.score_player2 = s2
+        match.winner_id = winner
+        match.status = "completed"
 
-    match.score_player1 = score_data.score_player1
-    match.score_player2 = score_data.score_player2
-    match.winner_id = winner_id
-    match.status = "completed"
+        has_advanced = False
+        if match.next_match_id is not None:
+            next_m = db.get(Match, match.next_match_id)
+            if next_m is not None:
+                if match.match_order % 2 == 0:
+                    next_m.player1_id = winner
+                else:
+                    next_m.player2_id = winner
+                has_advanced = True
+        else:
+            # Final validated: close the tournament and record its winner.
+            tournament.status = "finished"
+            tournament.winner_id = winner
+        return winner, has_advanced
 
+    winner_id: int | None = None
     advanced = False
-    if match.next_match_id is not None:
-        next_match = db.get(Match, match.next_match_id)
-        if next_match is not None:
-            # Inject winner based on match_order parity (even -> player1, odd -> player2)
-            if match.match_order % 2 == 0:
-                next_match.player1_id = winner_id
-            else:
-                next_match.player2_id = winner_id
-            advanced = True
+    response_message = ""
+
+    # Case 1: Direct admin / organizer arbitration or override
+    if is_admin_or_organizer and not is_player:
+        winner_id, advanced = _apply_completed_score(
+            score_data.score_player1,
+            score_data.score_player2,
+        )
+        response_message = "Match score validated by organizer"
+
     else:
-        # Final validated: close the tournament and record its winner.
-        tournament.status = "finished"
-        tournament.winner_id = winner_id
+        # Case 2: Reported by a player
+        is_p1 = current_user.id == match.player1_id
+        if is_p1:
+            match.player1_reported_score_p1 = score_data.score_player1
+            match.player1_reported_score_p2 = score_data.score_player2
+        else:
+            match.player2_reported_score_p1 = score_data.score_player1
+            match.player2_reported_score_p2 = score_data.score_player2
+
+        # Check other player's submission
+        other_reported = (
+            (match.player2_reported_score_p1, match.player2_reported_score_p2)
+            if is_p1
+            else (match.player1_reported_score_p1, match.player1_reported_score_p2)
+        )
+
+        if other_reported[0] is None or other_reported[1] is None:
+            # First player submission -> awaiting confirmation from opponent
+            match.status = "awaiting_confirmation"
+            response_message = "Score reported, waiting for opponent confirmation"
+        else:
+            # Both players reported: compare submitted scores
+            my_reported = (score_data.score_player1, score_data.score_player2)
+            if my_reported == other_reported:
+                # Consensus reached! Validate and advance
+                winner_id, advanced = _apply_completed_score(
+                    score_data.score_player1,
+                    score_data.score_player2,
+                )
+                response_message = "Both players confirmed the score: match completed"
+            else:
+                # Discrepancy -> disputed
+                match.status = "disputed"
+                response_message = (
+                    "Reported score conflicts with opponent submission: match marked as disputed"
+                )
 
     db.commit()
 
-    # Reload match with players
     refreshed_match = db.scalar(
         select(Match)
         .options(selectinload(Match.player1), selectinload(Match.player2))
@@ -577,10 +641,11 @@ def update_match_score(
     assert refreshed_match is not None
 
     return MatchScoreResponse(
-        message="Match score recorded successfully",
+        message=response_message,
         match=_serialize_match_to_bracket_match(refreshed_match),
         tournament_status=tournament.status,
         tournament_winner_id=tournament.winner_id,
         winner_id=winner_id,
         advanced_to_next_match=advanced,
+        status=refreshed_match.status,
     )

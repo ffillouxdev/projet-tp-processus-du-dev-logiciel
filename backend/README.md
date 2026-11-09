@@ -54,13 +54,15 @@ Gestion des tournois et filtrage serveur selon les droits de l'utilisateur :
 - **Lancement du tournoi & Arbre à élimination directe (`/tournaments/{tournament_id}/start` & `/bracket`)** :
   - `POST /tournaments/{tournament_id}/start` : lance le tournoi (au moins 2 participants requis), génère aléatoirement l'arbre à élimination directe (exempts/BYEs répartis pour qu'aucun match du 1er tour n'oppose deux BYEs) et passe le statut à `ongoing`.
   - `GET /tournaments/{tournament_id}/bracket` : retourne l'arbre du tournoi formaté pour le composant frontend `SingleEliminationBracket`.
-- **Renseignement du score d'un match (`PATCH /tournaments/{tournament_id}/matches/{match_id}/score`)** :
+- **Renseignement et validation des scores (`PATCH /tournaments/{tournament_id}/matches/{match_id}/score`)** :
   - Saisie du score (`score_player1`, `score_player2` entiers $\ge 0$ et sans égalité).
   - Autorisé pour les **joueurs du match**, les responsables de l'association (`organizer`/`admin`) et les superusers.
-  - Avancement automatique du vainqueur vers le tour suivant (`next_match_id`).
+  - **Validation par double saisie (consensus)** : lorsqu'un joueur saisit le résultat, le match passe en attente de confirmation (`awaiting_confirmation`). Dès que le 2e joueur saisit un score identique, le match est validé (`completed`), et le gagnant avance automatiquement au tour suivant (`next_match_id`).
+  - **Gestion des litiges** : si les deux joueurs rapportent des scores divergents, le statut du match passe à `disputed`.
+  - **Arbitrage organisateur / admin** : les organisateurs de l'association et superusers peuvent valider/arbitrer directement le résultat d'un match.
   - Saisie possible uniquement tant que le tournoi est `ongoing` (`409 Conflict` sinon) : les résultats d'un tournoi clôturé sont figés.
 - **Clôture de l'événement** :
-  - La validation du score de la finale passe automatiquement le tournoi au statut `finished` et enregistre son vainqueur (`tournaments.winner_id`).
+  - La validation de la finale (consensus des deux joueurs ou arbitrage organisateur) passe automatiquement le tournoi au statut `finished` et enregistre son vainqueur (`tournaments.winner_id`).
   - Le vainqueur est exposé par `GET /tournaments` et `GET /associations/{association_id}/tournaments` (`winner_id`), par `GET /tournaments/{tournament_id}` (`winner` : `id`, `username`, `full_name`) et par la réponse de saisie du score (`tournament_winner_id`).
   - Repasser un tournoi `finished` à un autre statut via `PATCH /tournaments/{tournament_id}` efface son vainqueur.
 - **Inscription à un tournoi (`POST /tournaments/{tournament_id}/participants`)** :
@@ -82,7 +84,8 @@ Le schéma est défini **uniquement par les migrations versionnées [Alembic](ht
 | `0001_initial_schema` | `users`, `refresh_tokens` |
 | `0002_associations_roles_tournaments` | `associations`, `roles`, `memberships` (utilisateur ↔ association avec un rôle), `tournaments`, `tournament_participants` (utilisateur ↔ tournoi) |
 | `0003_add_matches_table` | `matches` (arbre de tournoi à élimination directe, rounds et vainqueurs) |
-| `0004_add_tournament_winner` | colonne `tournaments.winner_id` (vainqueur du tournoi, renseigné à la validation de la finale) |
+| `0004_add_match_score_reports` | `matches` (scores rapportés par joueur 1 et joueur 2 pour confirmation du résultat, gestion des statuts `awaiting_confirmation` et `disputed`) |
+| `0005_add_tournament_winner` | colonne `tournaments.winner_id` (vainqueur du tournoi, renseigné à la validation de la finale) |
 
 ![MCD du schéma](../docs/mcd.svg)
 

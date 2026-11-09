@@ -231,7 +231,18 @@ def test_player_and_organizer_can_update_match_score_and_advance_bracket(
     assert len(bracket) == 1
     final_match = bracket[0]
 
-    # Player chloe reports score (Alice 3 - 1 Chloe) -> Alice wins
+    # Player alice (player 1) reports score 3 - 1 -> awaiting confirmation
+    alice_res = client.patch(
+        f"/tournaments/{tournament.id}/matches/{final_match['id']}/score",
+        json={"score_player1": 3, "score_player2": 1},
+        headers=alice_headers,
+    )
+    assert alice_res.status_code == 200
+    assert alice_res.json()["status"] == "awaiting_confirmation"
+    assert alice_res.json()["advanced_to_next_match"] is False
+    assert alice_res.json()["winner_id"] is None
+
+    # Player chloe (player 2) reports identical score 3 - 1 -> consensus! Match completed
     score_res = client.patch(
         f"/tournaments/{tournament.id}/matches/{final_match['id']}/score",
         json={"score_player1": 3, "score_player2": 1},
@@ -245,6 +256,64 @@ def test_player_and_organizer_can_update_match_score_and_advance_bracket(
     assert body["match"]["status"] == "completed"
     assert body["match"]["players"][0]["status"] == "winner"
     assert body["match"]["players"][1]["status"] == "loser"
+
+
+def test_disputed_score_when_players_report_differing_scores(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    chess_club = _association_by_name(db_session, "Avignon Chess Club")
+    alice_headers = _login_headers(client, "alice")
+    chloe_headers = _login_headers(client, "chloe")
+    admin_headers = _login_headers(client, "admin")
+
+    users = [_user_by_username(db_session, u) for u in ("alice", "chloe")]
+    tournament = Tournament(
+        name="Tournoi Litige Score",
+        association_id=chess_club.id,
+        status="open",
+    )
+    db_session.add(tournament)
+    db_session.flush()
+    for u in users:
+        db_session.add(TournamentParticipant(tournament_id=tournament.id, user_id=u.id))
+    db_session.commit()
+
+    start_res = client.post(f"/tournaments/{tournament.id}/start", headers=alice_headers)
+    assert start_res.status_code == 200
+    match_id = start_res.json()["bracket"][0]["id"]
+
+    # Player 1 claims 2 - 1
+    p1_res = client.patch(
+        f"/tournaments/{tournament.id}/matches/{match_id}/score",
+        json={"score_player1": 2, "score_player2": 1},
+        headers=alice_headers,
+    )
+    assert p1_res.status_code == 200
+    assert p1_res.json()["status"] == "awaiting_confirmation"
+
+    # Player 2 claims 0 - 3 (different) -> disputed!
+    p2_res = client.patch(
+        f"/tournaments/{tournament.id}/matches/{match_id}/score",
+        json={"score_player1": 0, "score_player2": 3},
+        headers=chloe_headers,
+    )
+    assert p2_res.status_code == 200
+    assert p2_res.json()["status"] == "disputed"
+    assert p2_res.json()["winner_id"] is None
+
+    # Organizer/Admin arbitration overrides conflict
+    final_p1_id = start_res.json()["bracket"][0]["players"][0]["id"]
+    admin_res = client.patch(
+        f"/tournaments/{tournament.id}/matches/{match_id}/score",
+        json={"score_player1": 2, "score_player2": 0},
+        headers=admin_headers,
+    )
+    assert admin_res.status_code == 200
+    assert admin_res.json()["status"] == "completed"
+    assert admin_res.json()["winner_id"] == final_p1_id
+    assert admin_res.json()["tournament_status"] == "finished"
 
 
 def test_score_validation_and_permissions(
@@ -311,11 +380,12 @@ def test_score_validation_and_permissions(
     assert res_pending.status_code == 400
     assert "pending players" in res_pending.json()["detail"].lower()
 
-    # Valid score on m1 -> advances to final
+    # Valid score on m1 by admin -> advances to final
+    admin_headers = _login_headers(client, "admin")
     res_valid = client.patch(
         f"/tournaments/{tournament.id}/matches/{m1['id']}/score",
         json={"score_player1": 10, "score_player2": 5},
-        headers=alice_headers,
+        headers=admin_headers,
     )
     assert res_valid.status_code == 200
     assert res_valid.json()["advanced_to_next_match"] is True
@@ -370,16 +440,16 @@ def test_validating_the_final_closes_tournament_and_exposes_winner(
     db_session: Session,
 ) -> None:
     load_demo_data(db_session)
-    alice_headers = _login_headers(client, "alice")
+    admin_headers = _login_headers(client, "admin")
     tournament, bracket = _start_tournament_with(
-        client, db_session, ("alice", "chloe", "david", "emma"), alice_headers
+        client, db_session, ("alice", "chloe", "david", "emma"), admin_headers
     )
     semis = [m for m in bracket if m["round_number"] == 1]
     final = next(m for m in bracket if m["round_number"] == 2)
 
     # Semi-finals do not close the tournament
     for semi in semis:
-        res = _report(client, tournament, semi["id"], alice_headers)
+        res = _report(client, tournament, semi["id"], admin_headers)
         assert res.status_code == 200
         assert res.json()["tournament_status"] == "ongoing"
         assert res.json()["tournament_winner_id"] is None
@@ -390,7 +460,7 @@ def test_validating_the_final_closes_tournament_and_exposes_winner(
     assert detail["winner"] is None
 
     # The final (player2 wins) closes the tournament
-    res = _report(client, tournament, final["id"], alice_headers, scores=(0, 3))
+    res = _report(client, tournament, final["id"], admin_headers, scores=(0, 3))
     assert res.status_code == 200
     champion_id = semis[1]["players"][0]["id"]
     assert res.json()["tournament_status"] == "finished"
@@ -413,15 +483,15 @@ def test_finished_tournament_results_are_locked(
     db_session: Session,
 ) -> None:
     load_demo_data(db_session)
-    alice_headers = _login_headers(client, "alice")
+    admin_headers = _login_headers(client, "admin")
     tournament, bracket = _start_tournament_with(
-        client, db_session, ("alice", "chloe"), alice_headers
+        client, db_session, ("alice", "chloe"), admin_headers
     )
     final = bracket[0]
-    assert _report(client, tournament, final["id"], alice_headers).status_code == 200
+    assert _report(client, tournament, final["id"], admin_headers).status_code == 200
 
     # Rewriting the final score after closure is refused, winner unchanged
-    res = _report(client, tournament, final["id"], alice_headers, scores=(0, 5))
+    res = _report(client, tournament, final["id"], admin_headers, scores=(0, 5))
     assert res.status_code == 409
     assert res.json()["detail"] == "Scores can only be recorded while the tournament is ongoing"
     detail = client.get(f"/tournaments/{tournament.id}").json()
@@ -433,14 +503,14 @@ def test_reopening_a_finished_tournament_clears_its_winner(
     db_session: Session,
 ) -> None:
     load_demo_data(db_session)
-    alice_headers = _login_headers(client, "alice")
+    admin_headers = _login_headers(client, "admin")
     tournament, bracket = _start_tournament_with(
-        client, db_session, ("alice", "chloe"), alice_headers
+        client, db_session, ("alice", "chloe"), admin_headers
     )
-    assert _report(client, tournament, bracket[0]["id"], alice_headers).status_code == 200
+    assert _report(client, tournament, bracket[0]["id"], admin_headers).status_code == 200
 
     res = client.patch(
-        f"/tournaments/{tournament.id}", json={"status": "ongoing"}, headers=alice_headers
+        f"/tournaments/{tournament.id}", json={"status": "ongoing"}, headers=admin_headers
     )
     assert res.status_code == 200
     assert res.json()["status"] == "ongoing"
@@ -468,7 +538,7 @@ def test_bracket_with_byes_can_be_played_until_closure(
     player_count: int,
 ) -> None:
     load_demo_data(db_session)
-    alice_headers = _login_headers(client, "alice")
+    admin_headers = _login_headers(client, "admin")
     usernames = ["alice", "bob", "chloe", "david", "emma"]
     for idx in range(player_count - len(usernames)):
         username = f"extra{idx}"
@@ -482,7 +552,7 @@ def test_bracket_with_byes_can_be_played_until_closure(
         usernames.append(username)
     db_session.flush()
     tournament, bracket = _start_tournament_with(
-        client, db_session, tuple(usernames), alice_headers
+        client, db_session, tuple(usernames), admin_headers
     )
 
     # No round-1 match opposes two BYEs
@@ -499,9 +569,37 @@ def test_bracket_with_byes_can_be_played_until_closure(
         ]
         if not playable:
             break
-        res = _report(client, tournament, playable[0]["id"], alice_headers)
+        res = _report(client, tournament, playable[0]["id"], admin_headers)
         assert res.status_code == 200, res.text
 
     detail = client.get(f"/tournaments/{tournament.id}").json()
     assert detail["status"] == "finished"
     assert detail["winner_id"] in {p.id for p in db_session.scalars(select(User))}
+
+
+def test_final_confirmed_by_both_players_closes_tournament(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    alice_headers = _login_headers(client, "alice")
+    chloe_headers = _login_headers(client, "chloe")
+    tournament, bracket = _start_tournament_with(
+        client, db_session, ("alice", "chloe"), alice_headers
+    )
+    final = bracket[0]
+
+    # First report only awaits the opponent's confirmation
+    res = _report(client, tournament, final["id"], alice_headers, scores=(3, 1))
+    assert res.status_code == 200
+    assert res.json()["status"] == "awaiting_confirmation"
+    assert res.json()["tournament_status"] == "ongoing"
+    assert res.json()["tournament_winner_id"] is None
+
+    # Matching report from the opponent validates the final and closes the tournament
+    res = _report(client, tournament, final["id"], chloe_headers, scores=(3, 1))
+    assert res.status_code == 200
+    champion_id = final["players"][0]["id"]
+    assert res.json()["tournament_status"] == "finished"
+    assert res.json()["tournament_winner_id"] == champion_id
+    assert client.get(f"/tournaments/{tournament.id}").json()["winner"]["id"] == champion_id
