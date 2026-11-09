@@ -6,7 +6,7 @@ Subject: Tournament organization platform.
 
 - `backend/` — API REST FastAPI (Python 3.14, dépendances gérées par uv)
   - `main.py` — point d'entrée de l'application (`app = FastAPI()`)
-  - `app/routers/` — routes REST (`/auth`, `/associations`, `/roles`)
+  - `app/routers/` — routes REST (`/auth`, `/associations`, `/roles`, `/tournaments`)
   - `app/models/` — modèles SQLAlchemy (users, associations, roles, memberships, tournaments, participants…)
   - `migrations/` — migrations Alembic versionnées (seule source du schéma)
   - `tests/` — tests pytest (PostgreSQL via testcontainers)
