@@ -54,11 +54,12 @@ Gestion des tournois et filtrage serveur selon les droits de l'utilisateur :
 - **Lancement du tournoi & Arbre à élimination directe (`/tournaments/{tournament_id}/start` & `/bracket`)** :
   - `POST /tournaments/{tournament_id}/start` : lance le tournoi (au moins 2 participants requis), génère aléatoirement l'arbre à élimination directe (gestion des exempts/BYEs) et passe le statut à `ongoing`.
   - `GET /tournaments/{tournament_id}/bracket` : retourne l'arbre du tournoi formaté pour le composant frontend `SingleEliminationBracket`.
-- **Renseignement du score d'un match (`PATCH /tournaments/{tournament_id}/matches/{match_id}/score`)** :
+- **Renseignement et validation des scores (`PATCH /tournaments/{tournament_id}/matches/{match_id}/score`)** :
   - Saisie du score (`score_player1`, `score_player2` entiers $\ge 0$ et sans égalité).
-  - Autorisé pour les **joueurs du match**, les responsables de l'association (`organizer`/`admin`) et les superusers.
-  - Avancement automatique du vainqueur vers le tour suivant (`next_match_id`).
-  - Passage automatique du tournoi au statut `finished` lors de la validation du score de la finale.
+  - **Validation par double saisie (consensus)** : lorsqu'un joueur saisit le résultat, le match passe en attente de confirmation (`awaiting_confirmation`). Dès que le 2e joueur saisit un score identique, le match est validé (`completed`), et le gagnant avance automatiquement au tour suivant (`next_match_id`).
+  - **Gestion des litiges** : si les deux joueurs rapportent des scores divergents, le statut du match passe à `disputed`.
+  - **Arbitrage organisateur / admin** : les organisateurs de l'association et superusers peuvent valider/arbitrer directement le résultat d'un match.
+  - **Finalisation du tournoi** : lorsque la finale est validée, le statut du tournoi passe automatiquement à `finished`.
 - **Inscription à un tournoi (`POST /tournaments/{tournament_id}/participants`)** :
   - Le lien public d'un tournoi est son URL `/tournaments/{tournament_id}` ; tout utilisateur authentifié et actif peut s'y inscrire (`201 Created`, renvoie l'inscription).
   - Refus : `401` si non authentifié, `403` si compte inactif ou brouillon non visible, `404` si le tournoi n'existe pas, `409 Conflict` si les inscriptions ne sont pas ouvertes (statut différent de `open`), si l'utilisateur est déjà inscrit ou si `max_participants` est atteint.
@@ -78,6 +79,7 @@ Le schéma est défini **uniquement par les migrations versionnées [Alembic](ht
 | `0001_initial_schema` | `users`, `refresh_tokens` |
 | `0002_associations_roles_tournaments` | `associations`, `roles`, `memberships` (utilisateur ↔ association avec un rôle), `tournaments`, `tournament_participants` (utilisateur ↔ tournoi) |
 | `0003_add_matches_table` | `matches` (arbre de tournoi à élimination directe, rounds et vainqueurs) |
+| `0004_add_match_score_reports` | `matches` (scores rapportés par joueur 1 et joueur 2 pour confirmation du résultat, gestion des statuts `awaiting_confirmation` et `disputed`) |
 
 ![MCD du schéma](../docs/mcd.svg)
 
