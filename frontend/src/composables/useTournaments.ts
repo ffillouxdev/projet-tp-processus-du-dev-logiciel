@@ -116,10 +116,24 @@ export function useTournaments() {
     })
   }
 
+  async function leaveTournament(id: number): Promise<void> {
+    if (!accessToken.value) {
+      throw new Error('Vous devez être connecté pour quitter ce tournoi.')
+    }
+
+    await api(`/tournaments/${id}/participants/me`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: 'Bearer ' + accessToken.value,
+      },
+    })
+  }
+
   return {
     fetchVisibleTournaments,
     fetchTournament,
     fetchTournamentBracket,
     joinTournament,
+    leaveTournament,
   }
 }

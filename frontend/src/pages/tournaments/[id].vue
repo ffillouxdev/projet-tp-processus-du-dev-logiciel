@@ -12,7 +12,7 @@ import {
 
 const route = useRoute('/tournaments/[id]')
 const { user } = useAuth()
-const { fetchTournament, fetchTournamentBracket, joinTournament } = useTournaments()
+const { fetchTournament, fetchTournamentBracket, joinTournament, leaveTournament } = useTournaments()
 const tournamentId = Number(route.params.id)
 const [tournamentResponse, bracketResponse] = await Promise.all([
   fetchTournament(tournamentId),
@@ -20,23 +20,41 @@ const [tournamentResponse, bracketResponse] = await Promise.all([
 ])
 const tournament = ref(tournamentResponse)
 const isJoining = ref(false)
-const joinError = ref('')
+const isLeaving = ref(false)
+const registrationError = ref('')
 const isRegistered = computed(() =>
   tournament.value.participants.some((participant) => participant.user_id === user.value?.id),
 )
 
 async function handleJoin(): Promise<void> {
   isJoining.value = true
-  joinError.value = ''
+  registrationError.value = ''
 
   try {
     const participant: TournamentParticipant = await joinTournament(tournamentId)
     tournament.value.participants.push(participant)
   } catch (error) {
-    joinError.value =
+    registrationError.value =
       error instanceof Error ? error.message : 'Impossible de rejoindre ce tournoi.'
   } finally {
     isJoining.value = false
+  }
+}
+
+async function handleLeave(): Promise<void> {
+  isLeaving.value = true
+  registrationError.value = ''
+
+  try {
+    await leaveTournament(tournamentId)
+    tournament.value.participants = tournament.value.participants.filter(
+      (participant) => participant.user_id !== user.value?.id,
+    )
+  } catch (error) {
+    registrationError.value =
+      error instanceof Error ? error.message : 'Impossible de quitter ce tournoi.'
+  } finally {
+    isLeaving.value = false
   }
 }
 
@@ -77,12 +95,19 @@ function formatDate(date: string | null): string | null {
           {{ tournament.description }}
         </p>
         <div v-if="tournament.status === 'open'" class="mt-6">
-          <UIButton v-if="!isRegistered" variant="secondary" :loading="isJoining" @click="handleJoin">
-            Rejoindre le tournoi
-          </UIButton>
-          <p v-else class="text-sm font-semibold text-blue-100">Vous participez à ce tournoi.</p>
-          <p v-if="joinError" role="alert" class="mt-3 text-sm font-semibold text-red-100">
-            {{ joinError }}
+          <div v-if="!isRegistered" class="flex flex-wrap gap-3">
+            <UIButton variant="secondary" :loading="isJoining" @click="handleJoin">
+              Rejoindre le tournoi
+            </UIButton>
+          </div>
+          <div v-else class="flex flex-wrap items-center gap-3">
+            <p class="text-sm font-semibold text-blue-100">Vous participez à ce tournoi.</p>
+            <UIButton variant="danger" :loading="isLeaving" @click="handleLeave">
+              Quitter le tournoi
+            </UIButton>
+          </div>
+          <p v-if="registrationError" role="alert" class="mt-3 text-sm font-semibold text-red-100">
+            {{ registrationError }}
           </p>
         </div>
       </header>
