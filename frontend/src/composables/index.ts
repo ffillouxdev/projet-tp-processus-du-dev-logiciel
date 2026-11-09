@@ -7,5 +7,6 @@ export type {
   TournamentBracketPlayer,
   TournamentDetail,
   TournamentParticipant,
+  TournamentStartResponse,
   TournamentStatus,
 } from './useTournaments'
