@@ -198,3 +198,122 @@ def test_start_tournament_permission_checks(
     res_ongoing = client.post(f"/tournaments/{tournament.id}/start", headers=admin_headers)
     assert res_ongoing.status_code == 409
     assert "already ongoing" in res_ongoing.json()["detail"].lower()
+
+
+def test_player_and_organizer_can_update_match_score_and_advance_bracket(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    chess_club = _association_by_name(db_session, "Avignon Chess Club")
+    alice_headers = _login_headers(client, "alice")
+    chloe_headers = _login_headers(client, "chloe")
+
+    users = [_user_by_username(db_session, u) for u in ("alice", "chloe")]
+    tournament = Tournament(
+        name="Tournoi Score 2 Joueurs",
+        association_id=chess_club.id,
+        status="open",
+    )
+    db_session.add(tournament)
+    db_session.flush()
+    for u in users:
+        db_session.add(TournamentParticipant(tournament_id=tournament.id, user_id=u.id))
+    db_session.commit()
+
+    # Start tournament -> 1 finale match between alice and chloe
+    start_res = client.post(f"/tournaments/{tournament.id}/start", headers=alice_headers)
+    assert start_res.status_code == 200
+    bracket = start_res.json()["bracket"]
+    assert len(bracket) == 1
+    final_match = bracket[0]
+
+    # Player chloe reports score (Alice 3 - 1 Chloe) -> Alice wins
+    score_res = client.patch(
+        f"/tournaments/{tournament.id}/matches/{final_match['id']}/score",
+        json={"score_player1": 3, "score_player2": 1},
+        headers=chloe_headers,
+    )
+    assert score_res.status_code == 200
+    body = score_res.json()
+    assert body["winner_id"] == final_match["players"][0]["id"]
+    assert body["tournament_status"] == "finished"
+    assert body["advanced_to_next_match"] is False
+    assert body["match"]["status"] == "completed"
+    assert body["match"]["players"][0]["status"] == "winner"
+    assert body["match"]["players"][1]["status"] == "loser"
+
+
+def test_score_validation_and_permissions(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    chess_club = _association_by_name(db_session, "Avignon Chess Club")
+    alice_headers = _login_headers(client, "alice")  # organizer
+    bob_headers = _login_headers(client, "bob")  # organizer of another club
+
+    users = [_user_by_username(db_session, u) for u in ("alice", "chloe", "david", "emma")]
+    tournament = Tournament(
+        name="Tournoi Validations Score",
+        association_id=chess_club.id,
+        status="open",
+    )
+    db_session.add(tournament)
+    db_session.flush()
+    for u in users:
+        db_session.add(TournamentParticipant(tournament_id=tournament.id, user_id=u.id))
+    db_session.commit()
+
+    start_res = client.post(f"/tournaments/{tournament.id}/start", headers=alice_headers)
+    assert start_res.status_code == 200
+    bracket = start_res.json()["bracket"]
+
+    # Round 1 matches
+    r1_matches = [m for m in bracket if m["round_number"] == 1]
+    m1 = r1_matches[0]
+    p1_id = m1["players"][0]["id"]
+
+    # Unknown user (bob) not in match and not admin of association -> 403
+    res_forbidden = client.patch(
+        f"/tournaments/{tournament.id}/matches/{m1['id']}/score",
+        json={"score_player1": 2, "score_player2": 1},
+        headers=bob_headers,
+    )
+    assert res_forbidden.status_code == 403
+
+    # Negative score -> 422
+    res_neg = client.patch(
+        f"/tournaments/{tournament.id}/matches/{m1['id']}/score",
+        json={"score_player1": -1, "score_player2": 2},
+        headers=alice_headers,
+    )
+    assert res_neg.status_code == 422
+
+    # Tie score -> 422
+    res_tie = client.patch(
+        f"/tournaments/{tournament.id}/matches/{m1['id']}/score",
+        json={"score_player1": 2, "score_player2": 2},
+        headers=alice_headers,
+    )
+    assert res_tie.status_code == 422
+
+    # Score on a pending match in round 2 (final) -> 400
+    final_match = next(m for m in bracket if m["round_number"] == 2)
+    res_pending = client.patch(
+        f"/tournaments/{tournament.id}/matches/{final_match['id']}/score",
+        json={"score_player1": 2, "score_player2": 1},
+        headers=alice_headers,
+    )
+    assert res_pending.status_code == 400
+    assert "pending players" in res_pending.json()["detail"].lower()
+
+    # Valid score on m1 -> advances to final
+    res_valid = client.patch(
+        f"/tournaments/{tournament.id}/matches/{m1['id']}/score",
+        json={"score_player1": 10, "score_player2": 5},
+        headers=alice_headers,
+    )
+    assert res_valid.status_code == 200
+    assert res_valid.json()["advanced_to_next_match"] is True
+    assert res_valid.json()["winner_id"] == p1_id

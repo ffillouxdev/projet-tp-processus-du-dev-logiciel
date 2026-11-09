@@ -32,3 +32,16 @@ class TournamentStartResponse(BaseModel):
     total_participants: int
     total_matches: int
     bracket: list[BracketMatchResponse]
+
+
+class MatchScoreUpdate(BaseModel):
+    score_player1: int
+    score_player2: int
+
+
+class MatchScoreResponse(BaseModel):
+    message: str
+    match: BracketMatchResponse
+    tournament_status: str
+    winner_id: int
+    advanced_to_next_match: bool

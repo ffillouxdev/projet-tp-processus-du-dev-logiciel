@@ -1,11 +1,12 @@
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.dependencies import (
+    ASSOCIATION_ADMIN_ROLES,
     build_visible_tournaments_stmt,
     can_user_view_tournament,
     get_current_active_user,
@@ -14,10 +15,18 @@ from app.dependencies import (
     require_tournament_admin,
 )
 from app.models.match import Match
+from app.models.membership import Membership
 from app.models.participant import TournamentParticipant
+from app.models.role import Role
 from app.models.tournament import Tournament
 from app.models.user import User
-from app.schemas.match import BracketMatchResponse, BracketPlayerResponse, TournamentStartResponse
+from app.schemas.match import (
+    BracketMatchResponse,
+    BracketPlayerResponse,
+    MatchScoreResponse,
+    MatchScoreUpdate,
+    TournamentStartResponse,
+)
 from app.schemas.tournament import (
     TournamentCreate,
     TournamentDetailResponse,
@@ -345,3 +354,125 @@ def get_tournament_bracket(
     ).all()
 
     return [_serialize_match_to_bracket_match(m) for m in matches]
+
+
+@router.patch(
+    "/{tournament_id}/matches/{match_id}/score",
+    response_model=MatchScoreResponse,
+    summary="Record or update the score of a match",
+    description=(
+        "Records the final score of a match, designates the winner, and advances "
+        "them to the next bracket round if available. If the completed match is the final, "
+        "the tournament status is updated to 'finished'. "
+        "Allowed for the 2 match players, organizers/admins, and platform administrators."
+    ),
+)
+def update_match_score(
+    tournament_id: int,
+    match_id: int,
+    score_data: MatchScoreUpdate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> MatchScoreResponse:
+    tournament = db.get(Tournament, tournament_id)
+    if tournament is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tournament not found",
+        )
+
+    match = db.get(Match, match_id)
+    if match is None or match.tournament_id != tournament.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Match not found in this tournament",
+        )
+
+    # Permission check: must be either player1, player2, association admin/organizer, or superuser
+    is_player = current_user.id in (match.player1_id, match.player2_id)
+    is_admin_or_organizer = False
+    if current_user.is_superuser:
+        is_admin_or_organizer = True
+    else:
+        membership = db.scalar(
+            select(Membership)
+            .join(Role, Membership.role_id == Role.id)
+            .where(
+                Membership.user_id == current_user.id,
+                Membership.association_id == tournament.association_id,
+                func.lower(Role.name).in_(ASSOCIATION_ADMIN_ROLES),
+            )
+        )
+        if membership is not None:
+            is_admin_or_organizer = True
+
+    if not (is_player or is_admin_or_organizer):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to record the score for this match",
+        )
+
+    # Validation: both players must be known
+    if match.player1_id is None or match.player2_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot record score for a match with pending players",
+        )
+
+    # Validation: scores must be non-negative
+    if score_data.score_player1 < 0 or score_data.score_player2 < 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Scores must be greater than or equal to 0",
+        )
+
+    # Validation: no ties in single elimination
+    if score_data.score_player1 == score_data.score_player2:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Ties are not allowed in single elimination matches",
+        )
+
+    # Determine winner
+    winner_id = (
+        match.player1_id
+        if score_data.score_player1 > score_data.score_player2
+        else match.player2_id
+    )
+
+    match.score_player1 = score_data.score_player1
+    match.score_player2 = score_data.score_player2
+    match.winner_id = winner_id
+    match.status = "completed"
+
+    advanced = False
+    if match.next_match_id is not None:
+        next_match = db.get(Match, match.next_match_id)
+        if next_match is not None:
+            # Inject winner based on match_order parity (even -> player1, odd -> player2)
+            if match.match_order % 2 == 0:
+                next_match.player1_id = winner_id
+            else:
+                next_match.player2_id = winner_id
+            advanced = True
+    else:
+        # Finale: no next_match_id -> tournament is finished!
+        tournament.status = "finished"
+
+    db.commit()
+
+    # Reload match with players
+    refreshed_match = db.scalar(
+        select(Match)
+        .options(selectinload(Match.player1), selectinload(Match.player2))
+        .where(Match.id == match.id)
+    )
+    assert refreshed_match is not None
+
+    return MatchScoreResponse(
+        message="Match score recorded successfully",
+        match=_serialize_match_to_bracket_match(refreshed_match),
+        tournament_status=tournament.status,
+        winner_id=winner_id,
+        advanced_to_next_match=advanced,
+    )
