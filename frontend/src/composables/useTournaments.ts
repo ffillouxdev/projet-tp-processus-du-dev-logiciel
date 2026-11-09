@@ -18,6 +18,48 @@ export interface Tournament {
   updated_at: string
 }
 
+export interface TournamentParticipant {
+  tournament_id: number
+  user_id: number
+  registered_at: string
+  user: {
+    id: number
+    username: string
+    full_name: string | null
+  }
+}
+
+export interface TournamentBracketPlayer {
+  id: number | null
+  name: string
+  score: number | null
+  status: 'winner' | 'loser' | 'pending'
+}
+
+export interface TournamentBracketMatch {
+  id: number
+  round: string
+  round_number: number
+  match_order: number
+  players: [TournamentBracketPlayer, TournamentBracketPlayer]
+  winner_id: number | null
+  status: 'winner' | 'loser' | 'pending'
+  next_match_id: number | null
+}
+
+export interface TournamentDetail extends Tournament {
+  association: {
+    id: number
+    name: string
+    description: string | null
+  }
+  participants: TournamentParticipant[]
+  bracket?: TournamentBracketMatch[]
+  total_participants?: number
+  total_matches?: number
+  message?: string
+}
+
 const api = $fetch.create({
   baseURL: API_BASE_URL,
 })
@@ -32,12 +74,38 @@ export function useTournaments() {
 
     return api<Tournament[]>('/tournaments', {
       headers: {
-        Authorization: `Bearer ${accessToken.value}`,
+        Authorization: 'Bearer ' + accessToken.value,
+      },
+    })
+  }
+
+  async function fetchTournament(id: number): Promise<TournamentDetail> {
+    if (!accessToken.value) {
+      throw new Error('Vous devez être connecté pour consulter ce tournoi.')
+    }
+
+    return api<TournamentDetail>(`/tournaments/${id}`, {
+      headers: {
+        Authorization: 'Bearer ' + accessToken.value,
+      },
+    })
+  }
+
+  async function fetchTournamentBracket(id: number): Promise<TournamentBracketMatch[]> {
+    if (!accessToken.value) {
+      throw new Error('Vous devez être connecté pour consulter le bracket de ce tournoi.')
+    }
+
+    return api<TournamentBracketMatch[]>(`/tournaments/${id}/bracket`, {
+      headers: {
+        Authorization: 'Bearer ' + accessToken.value,
       },
     })
   }
 
   return {
     fetchVisibleTournaments,
+    fetchTournament,
+    fetchTournamentBracket,
   }
 }
