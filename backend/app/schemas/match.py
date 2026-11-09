@@ -49,3 +49,24 @@ class MatchScoreResponse(BaseModel):
     winner_id: int | None = None
     advanced_to_next_match: bool
     status: str
+
+
+class DisputeResolveRequest(BaseModel):
+    score_player1: int
+    score_player2: int
+    reason: str | None = None
+
+
+class DisputeResponse(BaseModel):
+    match_id: int
+    tournament_id: int
+    round_name: str
+    round_number: int
+    match_order: int
+    player1: BracketPlayerResponse
+    player2: BracketPlayerResponse
+    player1_reported_score: tuple[int, int] | None
+    player2_reported_score: tuple[int, int] | None
+    status: str
+
+    model_config = ConfigDict(from_attributes=True)

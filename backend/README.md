@@ -59,12 +59,16 @@ Gestion des tournois et filtrage serveur selon les droits de l'utilisateur :
   - Autorisé pour les **joueurs du match**, les responsables de l'association (`organizer`/`admin`) et les superusers.
   - **Validation par double saisie (consensus)** : lorsqu'un joueur saisit le résultat, le match passe en attente de confirmation (`awaiting_confirmation`). Dès que le 2e joueur saisit un score identique, le match est validé (`completed`), et le gagnant avance automatiquement au tour suivant (`next_match_id`).
   - **Gestion des litiges** : si les deux joueurs rapportent des scores divergents, le statut du match passe à `disputed`.
-  - **Arbitrage organisateur / admin** : les organisateurs de l'association et superusers peuvent valider/arbitrer directement le résultat d'un match.
+  - **Arbitrage organisateur / admin** : les organisateurs de l'association et superusers peuvent valider/arbitrer directement le résultat d'un match via `PATCH .../score` ou l'endpoint dédié de résolution.
   - Saisie possible uniquement tant que le tournoi est `ongoing` (`409 Conflict` sinon) : les résultats d'un tournoi clôturé sont figés.
 - **Clôture de l'événement** :
   - La validation de la finale (consensus des deux joueurs ou arbitrage organisateur) passe automatiquement le tournoi au statut `finished` et enregistre son vainqueur (`tournaments.winner_id`).
   - Le vainqueur est exposé par `GET /tournaments` et `GET /associations/{association_id}/tournaments` (`winner_id`), par `GET /tournaments/{tournament_id}` (`winner` : `id`, `username`, `full_name`) et par la réponse de saisie du score (`tournament_winner_id`).
   - Repasser un tournoi `finished` à un autre statut via `PATCH /tournaments/{tournament_id}` efface son vainqueur.
+- **Alerte et gestion des litiges (`/tournaments/{tournament_id}/disputes`)** :
+  - `GET /tournaments/{tournament_id}/disputes` : liste les matchs en conflit (`status == 'disputed'`) avec les scores déclarés par chaque joueur (réservé aux organisateurs et administrateurs).
+  - `GET /tournaments/{tournament_id}/bracket?status=disputed` : filtre l'arbre du tournoi sur les matchs en litige.
+  - `POST /tournaments/{tournament_id}/matches/{match_id}/resolve-dispute` : tranche manuellement le litige en validant le score officiel et une éventuelle note/motif d'arbitrage (`reason`). Le gagnant avance au tour suivant et le match est marqué `completed`.
 - **Inscription à un tournoi (`POST /tournaments/{tournament_id}/participants`)** :
   - Le lien public d'un tournoi est son URL `/tournaments/{tournament_id}` ; tout utilisateur authentifié et actif peut s'y inscrire (`201 Created`, renvoie l'inscription).
   - Refus : `401` si non authentifié, `403` si compte inactif ou brouillon non visible, `404` si le tournoi n'existe pas, `409 Conflict` si les inscriptions ne sont pas ouvertes (statut différent de `open`), si l'utilisateur est déjà inscrit ou si `max_participants` est atteint.
