@@ -408,3 +408,163 @@ def test_unauthorized_users_cannot_create_update_or_delete_tournaments(
         ).status_code
         == 422
     )
+
+
+# ---------------------------------------------------------------------------
+# Joining a tournament (POST /tournaments/{id}/participants)
+# ---------------------------------------------------------------------------
+
+
+def _participant_usernames(client: TestClient, tournament_id: int) -> set[str]:
+    response = client.get(f"/tournaments/{tournament_id}")
+    assert response.status_code == 200, response.text
+    return {p["user"]["username"] for p in response.json()["participants"]}
+
+
+def test_authenticated_player_can_join_open_tournament(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    smash = _tournament_by_name(db_session, "Ligue Smash Bros")
+    alice = _user_by_username(db_session, "alice")
+
+    res = client.post(
+        f"/tournaments/{smash.id}/participants", headers=_login_headers(client, "alice")
+    )
+
+    assert res.status_code == 201, res.text
+    body = res.json()
+    assert body["tournament_id"] == smash.id
+    assert body["user_id"] == alice.id
+    assert body["user"]["username"] == "alice"
+    assert body["registered_at"]
+    assert _participant_usernames(client, smash.id) == {"emma", "alice"}
+
+
+def test_anonymous_and_inactive_users_cannot_join(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    smash = _tournament_by_name(db_session, "Ligue Smash Bros")
+
+    assert client.post(f"/tournaments/{smash.id}/participants").status_code == 401
+
+    hugo = _user_by_username(db_session, "hugo")
+    hugo_headers = {"Authorization": f"Bearer {create_access_token(user_id=hugo.id)}"}
+    res = client.post(f"/tournaments/{smash.id}/participants", headers=hugo_headers)
+    assert res.status_code == 403
+
+    assert _participant_usernames(client, smash.id) == {"emma"}
+
+
+def test_cannot_join_twice(client: TestClient, db_session: Session) -> None:
+    load_demo_data(db_session)
+    smash = _tournament_by_name(db_session, "Ligue Smash Bros")
+
+    res = client.post(
+        f"/tournaments/{smash.id}/participants", headers=_login_headers(client, "emma")
+    )
+
+    assert res.status_code == 409
+    assert res.json()["detail"] == "Already registered in this tournament"
+    assert _participant_usernames(client, smash.id) == {"emma"}
+
+
+def test_cannot_join_tournament_that_is_not_open(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    alice_headers = _login_headers(client, "alice")
+
+    # ongoing, finished, and a draft the user is allowed to see (alice organizes the club)
+    for name in ("Open rapide d'Avignon", "Blitz d'automne", "Championnat interne"):
+        tournament = _tournament_by_name(db_session, name)
+        res = client.post(f"/tournaments/{tournament.id}/participants", headers=alice_headers)
+        assert res.status_code == 409, name
+        assert res.json()["detail"] == "Tournament registrations are not open"
+
+
+def test_cannot_join_hidden_draft_or_missing_tournament(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    draft_esport = _tournament_by_name(db_session, "LAN de printemps")
+    alice_headers = _login_headers(client, "alice")
+
+    res = client.post(f"/tournaments/{draft_esport.id}/participants", headers=alice_headers)
+    assert res.status_code == 403
+
+    res = client.post("/tournaments/999999/participants", headers=alice_headers)
+    assert res.status_code == 404
+
+
+def test_cannot_join_full_tournament(client: TestClient, db_session: Session) -> None:
+    load_demo_data(db_session)
+    rocket = _tournament_by_name(db_session, "Coupe Rocket League 2v2")
+    rocket.max_participants = 3  # david and chloe are already registered
+    db_session.commit()
+
+    res = client.post(
+        f"/tournaments/{rocket.id}/participants", headers=_login_headers(client, "alice")
+    )
+    assert res.status_code == 201, res.text
+
+    res = client.post(
+        f"/tournaments/{rocket.id}/participants", headers=_login_headers(client, "emma")
+    )
+    assert res.status_code == 409
+    assert res.json()["detail"] == "Tournament is full"
+    assert _participant_usernames(client, rocket.id) == {"david", "chloe", "alice"}
+
+
+# ---------------------------------------------------------------------------
+# Leaving a tournament (DELETE /tournaments/{id}/participants/me)
+# ---------------------------------------------------------------------------
+
+
+def test_registered_player_can_leave_open_tournament(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    rocket = _tournament_by_name(db_session, "Coupe Rocket League 2v2")
+    david_headers = _login_headers(client, "david")
+
+    res = client.delete(f"/tournaments/{rocket.id}/participants/me", headers=david_headers)
+    assert res.status_code == 204
+    assert _participant_usernames(client, rocket.id) == {"chloe"}
+
+    # Leaving again: not registered anymore
+    res = client.delete(f"/tournaments/{rocket.id}/participants/me", headers=david_headers)
+    assert res.status_code == 404
+    assert res.json()["detail"] == "Not registered in this tournament"
+
+    # The freed seat can be taken again
+    res = client.post(f"/tournaments/{rocket.id}/participants", headers=david_headers)
+    assert res.status_code == 201
+
+
+def test_cannot_leave_without_auth_or_once_registrations_are_closed(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    smash = _tournament_by_name(db_session, "Ligue Smash Bros")
+    ongoing = _tournament_by_name(db_session, "Open rapide d'Avignon")
+    finished = _tournament_by_name(db_session, "Blitz d'automne")
+    emma_headers = _login_headers(client, "emma")
+
+    assert client.delete(f"/tournaments/{smash.id}/participants/me").status_code == 401
+
+    for tournament in (ongoing, finished):  # emma is registered in both
+        res = client.delete(f"/tournaments/{tournament.id}/participants/me", headers=emma_headers)
+        assert res.status_code == 409
+        assert res.json()["detail"] == "Tournament registrations are not open"
+    assert "emma" in _participant_usernames(client, ongoing.id)
+
+    res = client.delete("/tournaments/999999/participants/me", headers=emma_headers)
+    assert res.status_code == 404

@@ -1,7 +1,7 @@
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
@@ -21,6 +21,7 @@ from app.schemas.match import BracketMatchResponse, BracketPlayerResponse, Tourn
 from app.schemas.tournament import (
     TournamentCreate,
     TournamentDetailResponse,
+    TournamentParticipantResponse,
     TournamentResponse,
     TournamentStatus,
     TournamentUpdate,
@@ -194,6 +195,100 @@ def delete_tournament(
     db: Annotated[Session, Depends(get_db)],
 ) -> Response:
     db.delete(tournament)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _get_open_tournament_for_registration(
+    db: Session, tournament_id: int, current_user: User
+) -> Tournament:
+    """Load and lock a tournament whose registrations the user may change.
+
+    The row lock serializes concurrent registrations so max_participants cannot be exceeded.
+    """
+    tournament = db.scalar(
+        select(Tournament).where(Tournament.id == tournament_id).with_for_update()
+    )
+    if tournament is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tournament not found",
+        )
+    if not can_user_view_tournament(db, tournament, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this tournament",
+        )
+    if tournament.status != "open":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Tournament registrations are not open",
+        )
+    return tournament
+
+
+@router.post(
+    "/{tournament_id}/participants",
+    response_model=TournamentParticipantResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Join a tournament",
+    description=(
+        "Registers the authenticated user in the tournament reached through its public link. "
+        "Registration is only possible while the tournament is open and not full."
+    ),
+)
+def join_tournament(
+    tournament_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> TournamentParticipantResponse:
+    tournament = _get_open_tournament_for_registration(db, tournament_id, current_user)
+    if db.get(TournamentParticipant, (tournament.id, current_user.id)) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Already registered in this tournament",
+        )
+    if tournament.max_participants is not None:
+        registered = db.scalar(
+            select(func.count())
+            .select_from(TournamentParticipant)
+            .where(TournamentParticipant.tournament_id == tournament.id)
+        )
+        if (registered or 0) >= tournament.max_participants:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Tournament is full",
+            )
+
+    participant = TournamentParticipant(tournament_id=tournament.id, user_id=current_user.id)
+    db.add(participant)
+    db.commit()
+    db.refresh(participant)
+    return TournamentParticipantResponse.model_validate(participant)
+
+
+@router.delete(
+    "/{tournament_id}/participants/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Leave a tournament",
+    description=(
+        "Cancels the authenticated user's registration. "
+        "Only possible while the tournament registrations are still open."
+    ),
+)
+def leave_tournament(
+    tournament_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Response:
+    tournament = _get_open_tournament_for_registration(db, tournament_id, current_user)
+    participant = db.get(TournamentParticipant, (tournament.id, current_user.id))
+    if participant is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not registered in this tournament",
+        )
+    db.delete(participant)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
