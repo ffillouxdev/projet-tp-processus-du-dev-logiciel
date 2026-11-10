@@ -1,6 +1,15 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -38,6 +47,7 @@ from app.schemas.tournament import (
     TournamentUpdate,
 )
 from app.services.bracket import generate_single_elimination_bracket
+from app.services.websocket import tournament_connection_manager
 
 router = APIRouter()
 
@@ -374,7 +384,7 @@ def _serialize_match_to_bracket_match(match: Match) -> BracketMatchResponse:
         "the generated bracket. Restricted to tournament organizers and platform administrators."
     ),
 )
-def start_tournament(
+async def start_tournament(
     tournament: Annotated[Tournament, Depends(require_tournament_admin)],
     db: Annotated[Session, Depends(get_db)],
 ) -> TournamentStartResponse:
@@ -428,6 +438,8 @@ def start_tournament(
     ).all()
 
     bracket = [_serialize_match_to_bracket_match(m) for m in refreshed_matches]
+
+    await _broadcast_tournament_bracket_update(db, tournament)
 
     return TournamentStartResponse(
         message="Tournament started successfully and bracket generated",
@@ -484,6 +496,73 @@ def get_tournament_bracket(
     return [_serialize_match_to_bracket_match(m) for m in matches]
 
 
+async def _broadcast_tournament_bracket_update(db: Session, tournament: Tournament) -> None:
+    """Broadcast the latest tournament state and bracket to connected WebSocket clients."""
+    stmt = (
+        select(Match)
+        .options(selectinload(Match.player1), selectinload(Match.player2))
+        .where(Match.tournament_id == tournament.id)
+        .order_by(Match.round_number, Match.match_order)
+    )
+    matches = db.scalars(stmt).all()
+    bracket = [_serialize_match_to_bracket_match(m).model_dump(mode="json") for m in matches]
+
+    payload = {
+        "type": "bracket_updated",
+        "tournament_id": tournament.id,
+        "status": tournament.status,
+        "winner_id": tournament.winner_id,
+        "bracket": bracket,
+    }
+    await tournament_connection_manager.broadcast_to_tournament(tournament.id, payload)
+
+
+@router.websocket("/{tournament_id}/ws")
+async def tournament_websocket_endpoint(
+    websocket: WebSocket,
+    tournament_id: int,
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    tournament = db.get(Tournament, tournament_id)
+    if tournament is None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    await tournament_connection_manager.connect(tournament_id, websocket)
+
+    # Send initial bracket upon connection
+    try:
+        stmt = (
+            select(Match)
+            .options(selectinload(Match.player1), selectinload(Match.player2))
+            .where(Match.tournament_id == tournament.id)
+            .order_by(Match.round_number, Match.match_order)
+        )
+        matches = db.scalars(stmt).all()
+        initial_bracket = [
+            _serialize_match_to_bracket_match(m).model_dump(mode="json") for m in matches
+        ]
+        await websocket.send_json(
+            {
+                "type": "initial_bracket",
+                "tournament_id": tournament.id,
+                "status": tournament.status,
+                "winner_id": tournament.winner_id,
+                "bracket": initial_bracket,
+            }
+        )
+
+        while True:
+            # Keep connection open and handle incoming ping or messages
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        tournament_connection_manager.disconnect(tournament_id, websocket)
+    except Exception:
+        tournament_connection_manager.disconnect(tournament_id, websocket)
+
+
 @router.patch(
     "/{tournament_id}/matches/{match_id}/score",
     response_model=MatchScoreResponse,
@@ -495,7 +574,7 @@ def get_tournament_bracket(
         "Organizers and platform administrators can directly validate/arbitrate the match."
     ),
 )
-def update_match_score(
+async def update_match_score(
     tournament_id: int,
     match_id: int,
     score_data: MatchScoreUpdate,
@@ -643,6 +722,8 @@ def update_match_score(
 
     db.commit()
 
+    await _broadcast_tournament_bracket_update(db, tournament)
+
     refreshed_match = db.scalar(
         select(Match)
         .options(selectinload(Match.player1), selectinload(Match.player2))
@@ -738,7 +819,7 @@ def list_tournament_disputes(
         "Restricted to tournament organizers, association administrators, and platform admins."
     ),
 )
-def resolve_match_dispute(
+async def resolve_match_dispute(
     tournament_id: int,
     match_id: int,
     resolution: DisputeResolveRequest,
@@ -802,6 +883,8 @@ def resolve_match_dispute(
         tournament.status = "finished"
 
     db.commit()
+
+    await _broadcast_tournament_bracket_update(db, tournament)
 
     refreshed_match = db.scalar(
         select(Match)

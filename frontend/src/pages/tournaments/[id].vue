@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { TournamentBracket } from '@/components/tournaments'
 import { UIButton, UIDialog } from '@/components/ui'
@@ -18,6 +18,7 @@ const {
   joinTournament,
   leaveTournament,
   startTournament,
+  connectTournamentWebSocket,
 } = useTournaments()
 const tournamentId = Number(route.params.id)
 const [tournamentResponse, bracketResponse] = await Promise.all([
@@ -35,6 +36,29 @@ const startError = ref('')
 const isRegistered = computed(() =>
   tournament.value.participants.some((participant) => participant.user_id === user.value?.id),
 )
+
+let socket: WebSocket | null = null
+
+onMounted(() => {
+  socket = connectTournamentWebSocket(tournamentId, (data) => {
+    if (data.bracket) {
+      bracket.value = data.bracket
+    }
+    if (data.status) {
+      tournament.value.status = data.status
+    }
+    if (typeof data.winner_id !== 'undefined') {
+      tournament.value.winner_id = data.winner_id
+    }
+  })
+})
+
+onUnmounted(() => {
+  if (socket) {
+    socket.close()
+    socket = null
+  }
+})
 
 async function handleJoin(): Promise<void> {
   isJoining.value = true

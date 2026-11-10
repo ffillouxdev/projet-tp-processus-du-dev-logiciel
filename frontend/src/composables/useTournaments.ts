@@ -14,6 +14,7 @@ export interface Tournament {
   start_date: string | null
   end_date: string | null
   association_id: number
+  winner_id?: number | null
   created_at: string
   updated_at: string
 }
@@ -56,6 +57,14 @@ export interface TournamentStartResponse {
   bracket: TournamentBracketMatch[]
 }
 
+export interface TournamentWebSocketMessage {
+  type: 'initial_bracket' | 'bracket_updated' | string
+  tournament_id: number
+  status: TournamentStatus
+  winner_id: number | null
+  bracket: TournamentBracketMatch[]
+}
+
 export interface TournamentDetail extends Tournament {
   association: {
     id: number
@@ -72,6 +81,30 @@ export interface TournamentDetail extends Tournament {
 const api = $fetch.create({
   baseURL: API_BASE_URL,
 })
+
+export function getTournamentWebSocketUrl(id: number): string {
+  const wsBaseUrl = API_BASE_URL.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:')
+  return `${wsBaseUrl}/tournaments/${id}/ws`
+}
+
+export function connectTournamentWebSocket(
+  id: number,
+  onMessage: (data: TournamentWebSocketMessage) => void,
+): WebSocket {
+  const url = getTournamentWebSocketUrl(id)
+  const socket = new WebSocket(url)
+
+  socket.onmessage = (event: MessageEvent<string>) => {
+    try {
+      const data = JSON.parse(event.data) as TournamentWebSocketMessage
+      onMessage(data)
+    } catch {
+      // Ignore unparseable frames
+    }
+  }
+
+  return socket
+}
 
 export function useTournaments() {
   const { accessToken } = useAuth()
@@ -158,5 +191,6 @@ export function useTournaments() {
     joinTournament,
     leaveTournament,
     startTournament,
+    connectTournamentWebSocket,
   }
 }
