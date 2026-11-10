@@ -644,3 +644,54 @@ def test_final_confirmed_by_both_players_closes_tournament(
     assert res.json()["tournament_status"] == "finished"
     assert res.json()["tournament_winner_id"] == champion_id
     assert client.get(f"/tournaments/{tournament.id}").json()["winner"]["id"] == champion_id
+
+
+def test_tournament_websocket_connection_and_realtime_broadcast(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    alice_headers = _login_headers(client, "alice")
+    chloe_headers = _login_headers(client, "chloe")
+    tournament, bracket = _start_tournament_with(
+        client, db_session, ("alice", "chloe"), alice_headers
+    )
+    final_match = bracket[0]
+
+    # Connect WebSocket client to tournament room
+    with client.websocket_connect(f"/tournaments/{tournament.id}/ws") as websocket:
+        # Initial bracket is received upon connection
+        initial_msg = websocket.receive_json()
+        assert initial_msg["type"] == "initial_bracket"
+        assert initial_msg["tournament_id"] == tournament.id
+        assert len(initial_msg["bracket"]) == 1
+
+        # Ping pong test
+        websocket.send_text("ping")
+        assert websocket.receive_text() == "pong"
+
+        # Determine if alice is player 1 or player 2 in the match
+        p1_is_alice = final_match["players"][0]["id"] == _user_by_username(db_session, "alice").id
+
+        # First player reports score (awaiting confirmation) -> broadcast event
+        reporter1 = alice_headers if p1_is_alice else chloe_headers
+        reporter2 = chloe_headers if p1_is_alice else alice_headers
+
+        res1 = _report(client, tournament, final_match["id"], reporter1, scores=(3, 1))
+        assert res1.status_code == 200
+
+        update_msg1 = websocket.receive_json()
+        assert update_msg1["type"] == "bracket_updated"
+        assert update_msg1["tournament_id"] == tournament.id
+        assert update_msg1["bracket"][0]["player1_reported_score"] == [3, 1]
+        assert update_msg1["bracket"][0]["status"] == "awaiting_confirmation"
+
+        # Second player confirms identical score -> match completed & tournament finished
+        res2 = _report(client, tournament, final_match["id"], reporter2, scores=(3, 1))
+        assert res2.status_code == 200
+
+        update_msg2 = websocket.receive_json()
+        assert update_msg2["type"] == "bracket_updated"
+        assert update_msg2["status"] == "finished"
+        assert update_msg2["bracket"][0]["status"] == "completed"
+        assert update_msg2["winner_id"] is not None

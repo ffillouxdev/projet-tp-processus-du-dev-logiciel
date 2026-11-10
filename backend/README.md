@@ -69,6 +69,11 @@ Gestion des tournois et filtrage serveur selon les droits de l'utilisateur :
   - `GET /tournaments/{tournament_id}/disputes` : liste les matchs en conflit (`status == 'disputed'`) avec les scores déclarés par chaque joueur (réservé aux organisateurs et administrateurs).
   - `GET /tournaments/{tournament_id}/bracket?status=disputed` : filtre l'arbre du tournoi sur les matchs en litige.
   - `POST /tournaments/{tournament_id}/matches/{match_id}/resolve-dispute` : tranche manuellement le litige en validant le score officiel et une éventuelle note/motif d'arbitrage (`reason`). Le gagnant avance au tour suivant et le match est marqué `completed`.
+- **Mise à jour en temps réel via WebSocket (`WS /tournaments/{tournament_id}/ws`)** :
+  - Connexion temps réel publique permettant aux participants et visiteurs de suivre l'évolution des scores et de l'arbre sans recharger la page.
+  - Envoi immédiat à la connexion d'un événement `initial_bracket` avec l'arbre complet et le statut du tournoi.
+  - Diffusion automatique d'un événement `bracket_updated` à tous les clients connectés lors du lancement du tournoi (`POST .../start`), de la saisie/validation d'un score (`PATCH .../score`) et de la résolution d'un litige (`POST .../resolve-dispute`).
+  - Coupure propre du WebSocket lorsque le client quitte la page du tournoi (`onUnmounted`).
 - **Inscription à un tournoi (`POST /tournaments/{tournament_id}/participants`)** :
   - Le lien public d'un tournoi est son URL `/tournaments/{tournament_id}` ; tout utilisateur authentifié et actif peut s'y inscrire (`201 Created`, renvoie l'inscription).
   - Refus : `401` si non authentifié, `403` si compte inactif ou brouillon non visible, `404` si le tournoi n'existe pas, `409 Conflict` si les inscriptions ne sont pas ouvertes (statut différent de `open`), si l'utilisateur est déjà inscrit ou si `max_participants` est atteint.
