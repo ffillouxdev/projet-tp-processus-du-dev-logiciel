@@ -22,6 +22,7 @@ const {
   leaveTournament,
   startTournament,
   reportScore,
+  declareForfeit,
   connectTournamentWebSocket,
 } = useTournaments()
 const tournamentId = Number(route.params.id)
@@ -36,13 +37,17 @@ const isLeaving = ref(false)
 const isStarting = ref(false)
 const isStartDialogOpen = ref(false)
 const isScoreDialogOpen = ref(false)
+const isForfeitDialogOpen = ref(false)
 const selectedMatch = ref<TournamentBracketMatch | null>(null)
 const scorePlayer1 = ref<number | ''>('')
 const scorePlayer2 = ref<number | ''>('')
+const forfeitUserId = ref<number | null>(null)
 const isReportingScore = ref(false)
+const isForfeiting = ref(false)
 const registrationError = ref('')
 const startError = ref('')
 const scoreError = ref('')
+const forfeitError = ref('')
 const isRegistered = computed(() =>
   tournament.value.participants.some((participant) => participant.user_id === user.value?.id),
 )
@@ -203,6 +208,67 @@ async function handleReportScore(): Promise<void> {
   }
 }
 
+const canDeclareForfeit = computed(() => {
+  if (!selectedMatch.value) return false
+  if (tournament.value.status !== 'ongoing') return false
+  if (selectedMatch.value.winner_id !== null || selectedMatch.value.status !== 'pending') {
+    return false
+  }
+  const [p1, p2] = selectedMatch.value.players
+  if (!p1.id || !p2.id) return false
+  if (user.value?.is_superuser) return true
+  return user.value?.id === p1.id || user.value?.id === p2.id
+})
+
+function handleOpenForfeitDialog(): void {
+  if (!selectedMatch.value) return
+  const [p1, p2] = selectedMatch.value.players
+  if (user.value?.id === p1.id) {
+    forfeitUserId.value = p1.id
+  } else if (user.value?.id === p2.id) {
+    forfeitUserId.value = p2.id
+  } else {
+    forfeitUserId.value = p1.id
+  }
+  forfeitError.value = ''
+  isForfeitDialogOpen.value = true
+}
+
+async function handleConfirmForfeit(): Promise<void> {
+  if (!selectedMatch.value || !forfeitUserId.value) return
+  isForfeiting.value = true
+  forfeitError.value = ''
+
+  try {
+    const res = await declareForfeit(
+      tournamentId,
+      selectedMatch.value.id,
+      forfeitUserId.value,
+    )
+    toastSuccess(res.message || 'Forfait enregistré. L’adversaire est qualifié pour le tour suivant.')
+    isForfeitDialogOpen.value = false
+    isScoreDialogOpen.value = false
+    bracket.value = await fetchTournamentBracket(tournamentId)
+  } catch (error) {
+    const msg =
+      typeof error === 'object' &&
+      error !== null &&
+      'data' in error &&
+      typeof error.data === 'object' &&
+      error.data !== null &&
+      'detail' in error.data &&
+      typeof error.data.detail === 'string'
+        ? error.data.detail
+        : error instanceof Error
+          ? error.message
+          : 'Impossible de déclarer le forfait.'
+    forfeitError.value = msg
+    toastError(msg)
+  } finally {
+    isForfeiting.value = false
+  }
+}
+
 const statusContent: Record<TournamentStatus, { label: string; color: string }> = {
   draft: { label: 'Bientôt disponible', color: 'bg-amber-100 text-amber-800' },
   open: { label: 'Inscriptions ouvertes', color: 'bg-emerald-100 text-emerald-800' },
@@ -312,11 +378,68 @@ function formatDate(date: string | null): string | null {
           </p>
         </div>
         <template #footer="{ close }">
-          <UIButton variant="ghost" :disabled="isReportingScore" @click="close">
+          <div class="flex w-full items-center justify-between gap-3">
+            <UIButton
+              v-if="canDeclareForfeit"
+              variant="danger"
+              type="button"
+              :disabled="isReportingScore || isForfeiting"
+              @click="handleOpenForfeitDialog"
+            >
+              Déclarer forfait
+            </UIButton>
+            <div class="ms-auto flex items-center gap-2">
+              <UIButton variant="ghost" :disabled="isReportingScore" @click="close">
+                Annuler
+              </UIButton>
+              <UIButton variant="primary" :loading="isReportingScore" @click="handleReportScore">
+                Enregistrer le score
+              </UIButton>
+            </div>
+          </div>
+        </template>
+      </UIDialog>
+
+      <UIDialog
+        v-model="isForfeitDialogOpen"
+        title="Déclarer forfait"
+        description="Cette action est irréversible. L'adversaire sera automatiquement déclaré vainqueur (3-0) et qualifié pour le tour suivant."
+      >
+        <div v-if="selectedMatch" class="space-y-4">
+          <div v-if="user?.is_superuser" class="space-y-3">
+            <label class="block text-sm font-semibold text-slate-800 dark:text-gray-200">
+              Sélectionnez le participant déclarant forfait (ou absent) :
+            </label>
+            <div class="space-y-2">
+              <label
+                v-for="player in selectedMatch.players"
+                :key="player.id ?? player.name"
+                class="flex cursor-pointer items-center gap-3 rounded-lg border border-dialog-border bg-secondary/10 p-3 hover:bg-secondary/20"
+              >
+                <input
+                  v-model="forfeitUserId"
+                  type="radio"
+                  name="forfeit-player-choice"
+                  :value="player.id"
+                  class="text-primary focus:ring-primary"
+                />
+                <span class="font-bold text-gray-900 dark:text-gray-100">{{ player.name }}</span>
+              </label>
+            </div>
+          </div>
+          <p v-else class="text-sm text-slate-700 dark:text-gray-300">
+            Voulez-vous vraiment déclarer forfait pour ce match ? Votre adversaire remportera la victoire technique (3-0) et sera propulsé au tour suivant.
+          </p>
+          <p v-if="forfeitError" role="alert" class="text-sm font-semibold text-danger">
+            {{ forfeitError }}
+          </p>
+        </div>
+        <template #footer="{ close }">
+          <UIButton variant="ghost" :disabled="isForfeiting" @click="close">
             Annuler
           </UIButton>
-          <UIButton variant="primary" :loading="isReportingScore" @click="handleReportScore">
-            Enregistrer le score
+          <UIButton variant="danger" :loading="isForfeiting" @click="handleConfirmForfeit">
+            Confirmer le forfait
           </UIButton>
         </template>
       </UIDialog>

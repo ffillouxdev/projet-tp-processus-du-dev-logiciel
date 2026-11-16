@@ -225,6 +225,27 @@ export function useTournaments() {
     )
   }
 
+  async function declareForfeit(
+    tournamentId: number,
+    matchId: number,
+    forfeitingUserId?: number,
+  ): Promise<{ message: string }> {
+    if (!accessToken.value) {
+      throw new Error('Vous devez être connecté pour déclarer un forfait.')
+    }
+
+    return api<{ message: string }>(
+      `/tournaments/${tournamentId}/matches/${matchId}/forfeit`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + accessToken.value,
+        },
+        body: forfeitingUserId ? { forfeiting_user_id: forfeitingUserId } : {},
+      },
+    )
+  }
+
   async function fetchAssociations(): Promise<AssociationSummary[]> {
     if (!accessToken.value) {
       throw new Error('Vous devez être connecté pour consulter les associations.')
@@ -261,6 +282,7 @@ export function useTournaments() {
     leaveTournament,
     startTournament,
     reportScore,
+    declareForfeit,
     connectTournamentWebSocket,
   }
 }
