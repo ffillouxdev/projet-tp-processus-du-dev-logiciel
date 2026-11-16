@@ -41,6 +41,10 @@ class MatchScoreUpdate(BaseModel):
     score_player2: int
 
 
+class MatchForfeitRequest(BaseModel):
+    forfeiting_user_id: int | None = None
+
+
 class MatchScoreResponse(BaseModel):
     message: str
     match: BracketMatchResponse

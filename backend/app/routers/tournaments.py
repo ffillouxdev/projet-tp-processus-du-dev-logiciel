@@ -34,6 +34,7 @@ from app.schemas.match import (
     BracketPlayerResponse,
     DisputeResolveRequest,
     DisputeResponse,
+    MatchForfeitRequest,
     MatchScoreResponse,
     MatchScoreUpdate,
     TournamentStartResponse,
@@ -563,6 +564,36 @@ async def tournament_websocket_endpoint(
         tournament_connection_manager.disconnect(tournament_id, websocket)
 
 
+def _apply_match_result(
+    tournament: Tournament,
+    match: Match,
+    winner_id: int,
+    s1: int,
+    s2: int,
+    db: Session,
+) -> bool:
+    """Sets definitive match score and winner, advances bracket, and closes tournament on final."""
+    match.score_player1 = s1
+    match.score_player2 = s2
+    match.winner_id = winner_id
+    match.status = "completed"
+
+    has_advanced = False
+    if match.next_match_id is not None:
+        next_m = db.get(Match, match.next_match_id)
+        if next_m is not None:
+            if match.match_order % 2 == 0:
+                next_m.player1_id = winner_id
+            else:
+                next_m.player2_id = winner_id
+            has_advanced = True
+    else:
+        tournament.status = "finished"
+        tournament.winner_id = winner_id
+
+    return has_advanced
+
+
 @router.patch(
     "/{tournament_id}/matches/{match_id}/score",
     response_model=MatchScoreResponse,
@@ -650,24 +681,14 @@ async def update_match_score(
     def _apply_completed_score(s1: int, s2: int) -> tuple[int, bool]:
         winner = match.player1_id if s1 > s2 else match.player2_id
         assert winner is not None
-        match.score_player1 = s1
-        match.score_player2 = s2
-        match.winner_id = winner
-        match.status = "completed"
-
-        has_advanced = False
-        if match.next_match_id is not None:
-            next_m = db.get(Match, match.next_match_id)
-            if next_m is not None:
-                if match.match_order % 2 == 0:
-                    next_m.player1_id = winner
-                else:
-                    next_m.player2_id = winner
-                has_advanced = True
-        else:
-            # Final validated: close the tournament and record its winner.
-            tournament.status = "finished"
-            tournament.winner_id = winner
+        has_advanced = _apply_match_result(
+            tournament=tournament,
+            match=match,
+            winner_id=winner,
+            s1=s1,
+            s2=s2,
+            db=db,
+        )
         return winner, has_advanced
 
     winner_id: int | None = None
@@ -865,22 +886,15 @@ async def resolve_match_dispute(
         else match.player2_id
     )
 
-    match.score_player1 = resolution.score_player1
-    match.score_player2 = resolution.score_player2
-    match.winner_id = winner_id
-    match.status = "completed"
-
-    advanced = False
-    if match.next_match_id is not None:
-        next_m = db.get(Match, match.next_match_id)
-        if next_m is not None:
-            if match.match_order % 2 == 0:
-                next_m.player1_id = winner_id
-            else:
-                next_m.player2_id = winner_id
-            advanced = True
-    else:
-        tournament.status = "finished"
+    assert winner_id is not None
+    advanced = _apply_match_result(
+        tournament=tournament,
+        match=match,
+        winner_id=winner_id,
+        s1=resolution.score_player1,
+        s2=resolution.score_player2,
+        db=db,
+    )
 
     db.commit()
 
@@ -898,6 +912,151 @@ async def resolve_match_dispute(
         message=f"Dispute resolved and match score validated by organizer{reason_msg}",
         match=_serialize_match_to_bracket_match(refreshed_match),
         tournament_status=tournament.status,
+        tournament_winner_id=tournament.winner_id,
+        winner_id=winner_id,
+        advanced_to_next_match=advanced,
+        status=refreshed_match.status,
+    )
+
+
+@router.post(
+    "/{tournament_id}/matches/{match_id}/forfeit",
+    response_model=MatchScoreResponse,
+    summary="Declare a forfeit for a match",
+    description=(
+        "Declares a forfeit for a match. Can be called by a participating player to forfeit "
+        "their own match, or by tournament organizers / platform admins to forfeit an absent "
+        "participant. The opponent is automatically declared winner with a technical score "
+        "of 3-0 and advances to the next round."
+    ),
+)
+async def declare_match_forfeit(
+    tournament_id: int,
+    match_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    forfeit_data: MatchForfeitRequest | None = None,
+) -> MatchScoreResponse:
+    tournament = db.get(Tournament, tournament_id)
+    if tournament is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tournament not found",
+        )
+
+    match = db.get(Match, match_id)
+    if match is None or match.tournament_id != tournament.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Match not found in this tournament",
+        )
+
+    # Permission check: must be either player1, player2, association admin/organizer, or superuser
+    is_player = current_user.id in (match.player1_id, match.player2_id)
+    is_admin_or_organizer = False
+    if current_user.is_superuser:
+        is_admin_or_organizer = True
+    else:
+        membership = db.scalar(
+            select(Membership)
+            .join(Role, Membership.role_id == Role.id)
+            .where(
+                Membership.user_id == current_user.id,
+                Membership.association_id == tournament.association_id,
+                func.lower(Role.name).in_(ASSOCIATION_ADMIN_ROLES),
+            )
+        )
+        if membership is not None:
+            is_admin_or_organizer = True
+
+    if not (is_player or is_admin_or_organizer):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to declare a forfeit for this match",
+        )
+
+    # Tournament must be ongoing
+    if tournament.status != "ongoing":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Forfeits can only be declared while the tournament is ongoing",
+        )
+
+    # Match must not be already completed
+    if match.status == "completed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Match is already completed",
+        )
+
+    # Both players must be assigned
+    if match.player1_id is None or match.player2_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot declare forfeit for a match with pending players",
+        )
+
+    # Determine which user is forfeiting
+    forfeiting_id = forfeit_data.forfeiting_user_id if forfeit_data else None
+
+    if forfeiting_id is None:
+        if is_player:
+            forfeiting_id = current_user.id
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Organizers must specify forfeiting_user_id",
+            )
+
+    if forfeiting_id not in (match.player1_id, match.player2_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Forfeiting user is not a participant in this match",
+        )
+
+    if not is_admin_or_organizer and forfeiting_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Players can only declare their own forfeit",
+        )
+
+    # Technical score: 3-0 for opponent
+    if forfeiting_id == match.player1_id:
+        winner_id = match.player2_id
+        s1, s2 = 0, 3
+    else:
+        winner_id = match.player1_id
+        s1, s2 = 3, 0
+
+    assert winner_id is not None
+    advanced = _apply_match_result(
+        tournament=tournament,
+        match=match,
+        winner_id=winner_id,
+        s1=s1,
+        s2=s2,
+        db=db,
+    )
+
+    db.commit()
+
+    await _broadcast_tournament_bracket_update(db, tournament)
+
+    refreshed_match = db.scalar(
+        select(Match)
+        .options(selectinload(Match.player1), selectinload(Match.player2))
+        .where(Match.id == match.id)
+    )
+    assert refreshed_match is not None
+
+    winner_user = db.get(User, winner_id)
+    winner_name = (winner_user.full_name or winner_user.username) if winner_user else "L'adversaire"
+
+    return MatchScoreResponse(
+        message=f"Forfait enregistré. {winner_name} gagne par forfait (3-0).",
+        match=_serialize_match_to_bracket_match(refreshed_match),
+        tournament_status=tournament.status,
+        tournament_winner_id=tournament.winner_id,
         winner_id=winner_id,
         advanced_to_next_match=advanced,
         status=refreshed_match.status,

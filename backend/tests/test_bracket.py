@@ -695,3 +695,199 @@ def test_tournament_websocket_connection_and_realtime_broadcast(
         assert update_msg2["status"] == "finished"
         assert update_msg2["bracket"][0]["status"] == "completed"
         assert update_msg2["winner_id"] is not None
+
+
+def test_player_can_declare_own_forfeit_and_opponent_advances(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    chess_club = _association_by_name(db_session, "Avignon Chess Club")
+    alice_headers = _login_headers(client, "alice")
+    bob_headers = _login_headers(client, "bob")
+    chloe_headers = _login_headers(client, "chloe")
+    david_headers = _login_headers(client, "david")
+
+    users = [_user_by_username(db_session, u) for u in ("alice", "bob", "chloe", "david")]
+    tournament = Tournament(
+        name="Tournoi 4 Joueurs Forfait Joueur",
+        association_id=chess_club.id,
+        status="open",
+    )
+    db_session.add(tournament)
+    db_session.flush()
+    for u in users:
+        db_session.add(TournamentParticipant(tournament_id=tournament.id, user_id=u.id))
+    db_session.commit()
+
+    start_res = client.post(f"/tournaments/{tournament.id}/start", headers=alice_headers)
+    assert start_res.status_code == 200
+    bracket = start_res.json()["bracket"]
+    assert len(bracket) == 3
+
+    # Find a semifinal match
+    semis = [m for m in bracket if m["round_number"] == 1]
+    semi1 = semis[0]
+    p1_id = semi1["players"][0]["id"]
+    p2_id = semi1["players"][1]["id"]
+    assert p1_id is not None and p2_id is not None
+
+    # Determine headers for player 1 and player 2
+    user_map = {
+        _user_by_username(db_session, "alice").id: alice_headers,
+        _user_by_username(db_session, "bob").id: bob_headers,
+        _user_by_username(db_session, "chloe").id: chloe_headers,
+        _user_by_username(db_session, "david").id: david_headers,
+    }
+    p1_headers = user_map[p1_id]
+
+    # Player 1 declares forfeit without body (defaults to current_user)
+    forfeit_res = client.post(
+        f"/tournaments/{tournament.id}/matches/{semi1['id']}/forfeit",
+        headers=p1_headers,
+    )
+    assert forfeit_res.status_code == 200
+    data = forfeit_res.json()
+    assert data["winner_id"] == p2_id
+    assert data["advanced_to_next_match"] is True
+    assert data["status"] == "completed"
+    assert data["match"]["players"][0]["score"] == 0
+    assert data["match"]["players"][1]["score"] == 3
+    assert data["match"]["players"][0]["status"] == "loser"
+    assert data["match"]["players"][1]["status"] == "winner"
+
+    # Verify opponent was advanced to the finale match
+    bracket_res = client.get(f"/tournaments/{tournament.id}/bracket", headers=alice_headers)
+    assert bracket_res.status_code == 200
+    final_match = next(m for m in bracket_res.json() if m["round_number"] == 2)
+    advanced_player_ids = [p["id"] for p in final_match["players"]]
+    assert p2_id in advanced_player_ids
+
+
+def test_organizer_can_declare_forfeit_for_absent_player(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    chess_club = _association_by_name(db_session, "Avignon Chess Club")
+    alice_headers = _login_headers(client, "alice")  # organizer
+
+    users = [_user_by_username(db_session, u) for u in ("bob", "chloe")]
+    tournament = Tournament(
+        name="Tournoi Forfait Organisateur",
+        association_id=chess_club.id,
+        status="open",
+    )
+    db_session.add(tournament)
+    db_session.flush()
+    for u in users:
+        db_session.add(TournamentParticipant(tournament_id=tournament.id, user_id=u.id))
+    db_session.commit()
+
+    start_res = client.post(f"/tournaments/{tournament.id}/start", headers=alice_headers)
+    assert start_res.status_code == 200
+    final_match = start_res.json()["bracket"][0]
+    p1_id = final_match["players"][0]["id"]
+    p2_id = final_match["players"][1]["id"]
+    assert p1_id is not None and p2_id is not None
+
+    # Organizer alice declares forfeit for player 2 (e.g. absent)
+    forfeit_res = client.post(
+        f"/tournaments/{tournament.id}/matches/{final_match['id']}/forfeit",
+        json={"forfeiting_user_id": p2_id},
+        headers=alice_headers,
+    )
+    assert forfeit_res.status_code == 200
+    data = forfeit_res.json()
+    assert data["winner_id"] == p1_id
+    assert data["tournament_status"] == "finished"
+    assert data["tournament_winner_id"] == p1_id
+    assert data["match"]["players"][0]["score"] == 3
+    assert data["match"]["players"][1]["score"] == 0
+
+
+def test_forfeit_permissions_and_validations(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    load_demo_data(db_session)
+    chess_club = _association_by_name(db_session, "Avignon Chess Club")
+    alice_headers = _login_headers(client, "alice")  # organizer
+    bob_headers = _login_headers(client, "bob")
+    chloe_headers = _login_headers(client, "chloe")
+    david_headers = _login_headers(client, "david")
+
+    users = [_user_by_username(db_session, u) for u in ("bob", "chloe")]
+    tournament = Tournament(
+        name="Tournoi Validations Forfait",
+        association_id=chess_club.id,
+        status="open",
+    )
+    db_session.add(tournament)
+    db_session.flush()
+    for u in users:
+        db_session.add(TournamentParticipant(tournament_id=tournament.id, user_id=u.id))
+    db_session.commit()
+
+    # Forfeit on open (not ongoing) tournament -> 409
+    pre_res = client.post(
+        f"/tournaments/{tournament.id}/matches/1/forfeit",
+        headers=alice_headers,
+    )
+    # Match 1 does not exist yet -> 404
+    assert pre_res.status_code == 404
+
+    # Start tournament
+    client.post(f"/tournaments/{tournament.id}/start", headers=alice_headers)
+    final_match = client.get(f"/tournaments/{tournament.id}/bracket", headers=alice_headers).json()[
+        0
+    ]
+    p1_id = final_match["players"][0]["id"]
+    p2_id = final_match["players"][1]["id"]
+
+    # Non-participating non-admin (david) tries to declare forfeit -> 403
+    forbidden_res = client.post(
+        f"/tournaments/{tournament.id}/matches/{final_match['id']}/forfeit",
+        headers=david_headers,
+    )
+    assert forbidden_res.status_code == 403
+
+    # Player 1 tries to declare forfeit for player 2 -> 403
+    p1_headers = bob_headers if p1_id == _user_by_username(db_session, "bob").id else chloe_headers
+    impersonate_res = client.post(
+        f"/tournaments/{tournament.id}/matches/{final_match['id']}/forfeit",
+        json={"forfeiting_user_id": p2_id},
+        headers=p1_headers,
+    )
+    assert impersonate_res.status_code == 403
+
+    # Organizer forgets forfeiting_user_id -> 422
+    missing_id_res = client.post(
+        f"/tournaments/{tournament.id}/matches/{final_match['id']}/forfeit",
+        json={},
+        headers=alice_headers,
+    )
+    assert missing_id_res.status_code == 422
+
+    # Forfeit with unknown user id -> 422
+    unknown_user_res = client.post(
+        f"/tournaments/{tournament.id}/matches/{final_match['id']}/forfeit",
+        json={"forfeiting_user_id": 99999},
+        headers=alice_headers,
+    )
+    assert unknown_user_res.status_code == 422
+
+    # Valid forfeit
+    ok_res = client.post(
+        f"/tournaments/{tournament.id}/matches/{final_match['id']}/forfeit",
+        headers=p1_headers,
+    )
+    assert ok_res.status_code == 200
+
+    # Forfeit on completed match -> 409
+    already_done_res = client.post(
+        f"/tournaments/{tournament.id}/matches/{final_match['id']}/forfeit",
+        headers=alice_headers,
+        json={"forfeiting_user_id": p1_id},
+    )
+    assert already_done_res.status_code == 409
