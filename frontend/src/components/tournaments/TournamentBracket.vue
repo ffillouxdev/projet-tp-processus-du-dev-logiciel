@@ -10,15 +10,23 @@ import type { TournamentBracketMatch } from '@/composables'
 const props = withDefaults(
   defineProps<{
     matches?: TournamentBracketMatch[]
+    isMatchInteractive?: (match: TournamentBracketMatch) => boolean
   }>(),
   {
     matches: () => [],
+    isMatchInteractive: () => false,
   },
 )
 
 const emit = defineEmits<{
   (e: 'selectMatch', match: TournamentBracketMatch): void
 }>()
+
+function checkMatchInteractive(matchId: string | number): boolean {
+  const match = props.matches.find((m) => m.id === matchId)
+  if (!match) return false
+  return props.isMatchInteractive(match)
+}
 
 function handleSelectMatch(matchId: string | number) {
   const match = props.matches.find((m) => m.id === matchId)
@@ -55,6 +63,7 @@ const bracketMatches = computed<SingleEliminationMatches>(() =>
   <SingleEliminationBracket
     v-if="bracketMatches.length"
     :matches="bracketMatches"
+    :is-match-interactive="checkMatchInteractive"
     title="Tableau des matchs"
     @select-match="handleSelectMatch"
   />

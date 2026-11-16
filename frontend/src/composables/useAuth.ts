@@ -26,6 +26,16 @@ export interface AuthResponse {
   tokens: TokenResponse
 }
 
+export interface UserMembership {
+  user_id: number
+  association_id: number
+  role_id: number
+  role: {
+    id: number
+    name: string
+  }
+}
+
 export interface RegisterRequest {
   email: string
   username: string
@@ -154,6 +164,17 @@ async function logout(): Promise<MessageResponse | undefined> {
   }
 }
 
+async function fetchMyMemberships(): Promise<UserMembership[]> {
+  const token = tokens.value?.access_token
+  if (!token) return []
+
+  return api<UserMembership[]>('/auth/me/memberships', {
+    headers: {
+      Authorization: 'Bearer ' + token,
+    },
+  })
+}
+
 export function useAuth() {
   return {
     user,
@@ -164,5 +185,6 @@ export function useAuth() {
     login,
     refreshToken,
     logout,
+    fetchMyMemberships,
   }
 }

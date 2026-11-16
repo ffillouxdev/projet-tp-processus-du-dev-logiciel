@@ -6,23 +6,41 @@ export interface BracketPlayer {
   status?: 'winner' | 'loser' | 'pending'
 }
 
-defineProps<{
-  players: readonly [BracketPlayer, BracketPlayer]
-}>()
+const props = withDefaults(
+  defineProps<{
+    players: readonly [BracketPlayer, BracketPlayer]
+    interactive?: boolean
+  }>(),
+  {
+    interactive: false,
+  },
+)
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'click'): void
 }>()
+
+function handleClick(): void {
+  if (props.interactive) {
+    emit('click')
+  }
+}
 </script>
 
 <template>
   <article
-    class="cursor-pointer overflow-hidden rounded-lg border border-dialog-border bg-dialog-bg shadow-sm transition-all hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-    tabindex="0"
-    role="button"
-    @click="$emit('click')"
-    @keydown.enter="$emit('click')"
-    @keydown.space.prevent="$emit('click')"
+    :class="[
+      'overflow-hidden rounded-lg border border-dialog-border bg-dialog-bg shadow-sm transition-all',
+      interactive
+        ? 'cursor-pointer hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+        : 'cursor-default',
+    ]"
+    :tabindex="interactive ? 0 : undefined"
+    :role="interactive ? 'button' : undefined"
+    :aria-disabled="!interactive ? 'true' : undefined"
+    @click="handleClick"
+    @keydown.enter="handleClick"
+    @keydown.space.prevent="handleClick"
   >
     <div class="divide-y divide-dialog-border">
       <div
