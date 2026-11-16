@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import { UIToastContainer } from '@/components/ui'
+</script>
+
 <template>
   <Suspense>
     <template #default>
@@ -9,4 +13,5 @@
       </main>
     </template>
   </Suspense>
+  <UIToastContainer />
 </template>

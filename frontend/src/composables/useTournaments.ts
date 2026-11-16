@@ -78,6 +78,22 @@ export interface TournamentDetail extends Tournament {
   message?: string
 }
 
+export interface AssociationSummary {
+  id: number
+  name: string
+  description: string | null
+}
+
+export interface TournamentCreateInput {
+  name: string
+  description?: string | null
+  status?: TournamentStatus
+  max_participants?: number | null
+  start_date?: string | null
+  end_date?: string | null
+  association_id: number
+}
+
 const api = $fetch.create({
   baseURL: API_BASE_URL,
 })
@@ -184,13 +200,67 @@ export function useTournaments() {
     })
   }
 
+  async function reportScore(
+    tournamentId: number,
+    matchId: number,
+    scorePlayer1: number,
+    scorePlayer2: number,
+  ): Promise<{ message: string }> {
+    if (!accessToken.value) {
+      throw new Error('Vous devez être connecté pour enregistrer un score.')
+    }
+
+    return api<{ message: string }>(
+      `/tournaments/${tournamentId}/matches/${matchId}/score`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: 'Bearer ' + accessToken.value,
+        },
+        body: {
+          score_player1: scorePlayer1,
+          score_player2: scorePlayer2,
+        },
+      },
+    )
+  }
+
+  async function fetchAssociations(): Promise<AssociationSummary[]> {
+    if (!accessToken.value) {
+      throw new Error('Vous devez être connecté pour consulter les associations.')
+    }
+
+    return api<AssociationSummary[]>('/associations', {
+      headers: {
+        Authorization: 'Bearer ' + accessToken.value,
+      },
+    })
+  }
+
+  async function createTournament(input: TournamentCreateInput): Promise<Tournament> {
+    if (!accessToken.value) {
+      throw new Error('Vous devez être connecté pour créer un tournoi.')
+    }
+
+    return api<Tournament>('/tournaments', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + accessToken.value,
+      },
+      body: input,
+    })
+  }
+
   return {
     fetchVisibleTournaments,
     fetchTournament,
     fetchTournamentBracket,
+    fetchAssociations,
+    createTournament,
     joinTournament,
     leaveTournament,
     startTournament,
+    reportScore,
     connectTournamentWebSocket,
   }
 }

@@ -12,6 +12,10 @@ const props = defineProps<{
   embedded?: boolean
 }>()
 
+const emit = defineEmits<{
+  (e: 'selectMatch', matchId: string | number): void
+}>()
+
 const rounds = computed(() => {
   const grouped = new Map<string, SingleEliminationMatch[]>()
 
@@ -54,6 +58,7 @@ const rounds = computed(() => {
               v-for="match in round.matches"
               :key="match.id"
               :players="match.players"
+              @click="emit('selectMatch', match.id)"
             />
           </div>
         </div>

@@ -2,11 +2,12 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { LoginForm, type LoginFormData } from '@/components/auth'
-import { useAuth } from '@/composables'
+import { useAuth, useToast } from '@/composables'
 import { UITitle, UIText } from '@/components/ui'
 
 const router = useRouter()
 const { login } = useAuth()
+const { success: toastSuccess, error: toastError } = useToast()
 const loginError = ref('')
 
 async function handleLogin(data: LoginFormData): Promise<void> {
@@ -14,10 +15,12 @@ async function handleLogin(data: LoginFormData): Promise<void> {
 
   try {
     await login(data)
+    toastSuccess('Connexion réussie !')
     await router.push('/')
   } catch (error) {
     loginError.value =
       error instanceof Error ? error.message : 'Une erreur est survenue lors de la connexion.'
+    toastError(loginError.value)
   }
 }
 </script>

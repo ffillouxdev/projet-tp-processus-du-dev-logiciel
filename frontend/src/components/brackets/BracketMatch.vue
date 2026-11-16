@@ -10,11 +10,19 @@ defineProps<{
   players: readonly [BracketPlayer, BracketPlayer]
 }>()
 
+defineEmits<{
+  (e: 'click'): void
+}>()
 </script>
 
 <template>
   <article
-    class="overflow-hidden rounded-lg border border-dialog-border bg-dialog-bg shadow-sm transition-shadow hover:shadow-md"
+    class="cursor-pointer overflow-hidden rounded-lg border border-dialog-border bg-dialog-bg shadow-sm transition-all hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    tabindex="0"
+    role="button"
+    @click="$emit('click')"
+    @keydown.enter="$emit('click')"
+    @keydown.space.prevent="$emit('click')"
   >
     <div class="divide-y divide-dialog-border">
       <div

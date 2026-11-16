@@ -16,6 +16,17 @@ const props = withDefaults(
   },
 )
 
+const emit = defineEmits<{
+  (e: 'selectMatch', match: TournamentBracketMatch): void
+}>()
+
+function handleSelectMatch(matchId: string | number) {
+  const match = props.matches.find((m) => m.id === matchId)
+  if (match) {
+    emit('selectMatch', match)
+  }
+}
+
 const bracketMatches = computed<SingleEliminationMatches>(() =>
   props.matches.map((match): SingleEliminationMatch => {
     const [firstPlayer, secondPlayer] = match.players
@@ -45,6 +56,7 @@ const bracketMatches = computed<SingleEliminationMatches>(() =>
     v-if="bracketMatches.length"
     :matches="bracketMatches"
     title="Tableau des matchs"
+    @select-match="handleSelectMatch"
   />
   <p v-else class="rounded-xl border border-dashed border-dialog-border p-6 text-center text-dialog-muted">
     Le bracket sera disponible lorsque le tournoi commencera.

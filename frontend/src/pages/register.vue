@@ -2,11 +2,12 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { RegisterForm, type RegisterFormData } from '@/components/auth'
-import { useAuth } from '@/composables'
+import { useAuth, useToast } from '@/composables'
 import { UITitle, UIText } from '@/components/ui'
 
 const router = useRouter()
 const { register } = useAuth()
+const { success: toastSuccess, error: toastError } = useToast()
 const registrationError = ref('')
 
 async function handleRegister(data: RegisterFormData): Promise<void> {
@@ -19,12 +20,14 @@ async function handleRegister(data: RegisterFormData): Promise<void> {
       full_name: data.fullName.trim() || null,
       password: data.password,
     })
+    toastSuccess('Compte créé avec succès !')
     await router.push('/')
   } catch (error) {
     registrationError.value =
       error instanceof Error
         ? error.message
         : 'Une erreur est survenue lors de la création du compte.'
+    toastError(registrationError.value)
   }
 }
 </script>

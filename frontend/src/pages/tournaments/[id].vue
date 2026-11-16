@@ -5,19 +5,23 @@ import { TournamentBracket } from '@/components/tournaments'
 import { UIButton, UIDialog } from '@/components/ui'
 import {
   useAuth,
+  useToast,
   useTournaments,
   type TournamentStatus,
   type TournamentParticipant,
+  type TournamentBracketMatch,
 } from '@/composables'
 
 const route = useRoute('/tournaments/[id]')
 const { user } = useAuth()
+const { success: toastSuccess, error: toastError } = useToast()
 const {
   fetchTournament,
   fetchTournamentBracket,
   joinTournament,
   leaveTournament,
   startTournament,
+  reportScore,
   connectTournamentWebSocket,
 } = useTournaments()
 const tournamentId = Number(route.params.id)
@@ -31,8 +35,14 @@ const isJoining = ref(false)
 const isLeaving = ref(false)
 const isStarting = ref(false)
 const isStartDialogOpen = ref(false)
+const isScoreDialogOpen = ref(false)
+const selectedMatch = ref<TournamentBracketMatch | null>(null)
+const scorePlayer1 = ref<number | ''>('')
+const scorePlayer2 = ref<number | ''>('')
+const isReportingScore = ref(false)
 const registrationError = ref('')
 const startError = ref('')
+const scoreError = ref('')
 const isRegistered = computed(() =>
   tournament.value.participants.some((participant) => participant.user_id === user.value?.id),
 )
@@ -67,9 +77,24 @@ async function handleJoin(): Promise<void> {
   try {
     const participant: TournamentParticipant = await joinTournament(tournamentId)
     tournament.value.participants.push(participant)
+    toastSuccess('Inscription confirmée ! Vous participez à ce tournoi.')
   } catch (error) {
-    registrationError.value =
-      error instanceof Error ? error.message : 'Impossible de rejoindre ce tournoi.'
+    const msg =
+      typeof error === 'object' &&
+      error !== null &&
+      'data' in error &&
+      typeof error.data === 'object' &&
+      error.data !== null &&
+      'detail' in error.data &&
+      typeof error.data.detail === 'string'
+        ? error.data.detail === 'Tournament is full'
+          ? 'Ce tournoi est complet.'
+          : error.data.detail
+        : error instanceof Error
+          ? error.message
+          : 'Impossible de rejoindre ce tournoi.'
+    registrationError.value = msg
+    toastError(msg)
   } finally {
     isJoining.value = false
   }
@@ -84,9 +109,11 @@ async function handleLeave(): Promise<void> {
     tournament.value.participants = tournament.value.participants.filter(
       (participant) => participant.user_id !== user.value?.id,
     )
+    toastSuccess('Vous avez quitté le tournoi avec succès.')
   } catch (error) {
-    registrationError.value =
-      error instanceof Error ? error.message : 'Impossible de quitter ce tournoi.'
+    const msg = error instanceof Error ? error.message : 'Impossible de quitter ce tournoi.'
+    registrationError.value = msg
+    toastError(msg)
   } finally {
     isLeaving.value = false
   }
@@ -101,6 +128,7 @@ async function handleStart(): Promise<void> {
     tournament.value.status = response.status
     bracket.value = response.bracket
     isStartDialogOpen.value = false
+    toastSuccess('Tournoi lancé avec succès ! L’arbre a été généré.')
   } catch (error) {
     if (
       typeof error === 'object' &&
@@ -116,8 +144,62 @@ async function handleStart(): Promise<void> {
       startError.value =
         error instanceof Error ? error.message : 'Impossible de lancer ce tournoi.'
     }
+    toastError(startError.value)
   } finally {
     isStarting.value = false
+  }
+}
+
+function handleSelectMatch(match: TournamentBracketMatch): void {
+  // Only allow scoring if both players are present
+  if (!match.players[0].name || !match.players[1].name) return
+  if (match.players[0].name === 'En attente' || match.players[1].name === 'En attente') return
+
+  selectedMatch.value = match
+  scorePlayer1.value = match.players[0].score ?? 0
+  scorePlayer2.value = match.players[1].score ?? 0
+  scoreError.value = ''
+  isScoreDialogOpen.value = true
+}
+
+async function handleReportScore(): Promise<void> {
+  if (!selectedMatch.value) return
+  if (scorePlayer1.value === '' || scorePlayer2.value === '') {
+    scoreError.value = 'Veuillez saisir un score pour chaque joueur.'
+    toastError(scoreError.value)
+    return
+  }
+
+  isReportingScore.value = true
+  scoreError.value = ''
+
+  try {
+    await reportScore(
+      tournamentId,
+      selectedMatch.value.id,
+      Number(scorePlayer1.value),
+      Number(scorePlayer2.value),
+    )
+    toastSuccess('Score bien enregistré')
+    isScoreDialogOpen.value = false
+    bracket.value = await fetchTournamentBracket(tournamentId)
+  } catch (error) {
+    const msg =
+      typeof error === 'object' &&
+      error !== null &&
+      'data' in error &&
+      typeof error.data === 'object' &&
+      error.data !== null &&
+      'detail' in error.data &&
+      typeof error.data.detail === 'string'
+        ? error.data.detail
+        : error instanceof Error
+          ? error.message
+          : 'Impossible d’enregistrer le score.'
+    scoreError.value = msg
+    toastError(msg)
+  } finally {
+    isReportingScore.value = false
   }
 }
 
@@ -199,10 +281,53 @@ function formatDate(date: string | null): string | null {
         </template>
       </UIDialog>
 
+      <UIDialog
+        v-model="isScoreDialogOpen"
+        title="Saisir le score du match"
+        description="Renseignez le score final des deux adversaires."
+      >
+        <div v-if="selectedMatch" class="space-y-4">
+          <div class="flex items-center justify-between gap-4 rounded-xl border border-dialog-border bg-secondary/10 p-3">
+            <span class="font-bold text-gray-900 dark:text-gray-100">{{ selectedMatch.players[0].name }}</span>
+            <input
+              v-model.number="scorePlayer1"
+              type="number"
+              min="0"
+              class="w-20 rounded-lg border border-dialog-border bg-dialog-bg p-2 text-center text-lg font-bold"
+              placeholder="0"
+            />
+          </div>
+          <div class="flex items-center justify-between gap-4 rounded-xl border border-dialog-border bg-secondary/10 p-3">
+            <span class="font-bold text-gray-900 dark:text-gray-100">{{ selectedMatch.players[1].name }}</span>
+            <input
+              v-model.number="scorePlayer2"
+              type="number"
+              min="0"
+              class="w-20 rounded-lg border border-dialog-border bg-dialog-bg p-2 text-center text-lg font-bold"
+              placeholder="0"
+            />
+          </div>
+          <p v-if="scoreError" role="alert" class="text-sm font-semibold text-danger">
+            {{ scoreError }}
+          </p>
+        </div>
+        <template #footer="{ close }">
+          <UIButton variant="ghost" :disabled="isReportingScore" @click="close">
+            Annuler
+          </UIButton>
+          <UIButton variant="primary" :loading="isReportingScore" @click="handleReportScore">
+            Enregistrer le score
+          </UIButton>
+        </template>
+      </UIDialog>
+
       <div class="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <section class="rounded-2xl border border-dialog-border bg-dialog-bg p-6 shadow-sm" aria-labelledby="bracket-title">
           <h2 id="bracket-title" class="mb-5 text-2xl font-black text-slate-900">Bracket</h2>
-          <TournamentBracket :matches="bracket" />
+          <TournamentBracket :matches="bracket" @select-match="handleSelectMatch" />
+          <p v-if="bracket.length" class="mt-3 text-xs text-dialog-muted">
+            Cliquez sur un match pour saisir ou mettre à jour les scores.
+          </p>
         </section>
 
         <aside class="space-y-6">
