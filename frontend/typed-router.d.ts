@@ -59,6 +59,13 @@ declare module 'vue-router/auto-routes' {
       { id: ParamValue<false> },
       | never
     >,
+    '/tournaments/create': RouteRecordInfo<
+      '/tournaments/create',
+      '/tournaments/create',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
   }
 
   /**
@@ -103,6 +110,14 @@ declare module 'vue-router/auto-routes' {
         | never
       pathParamNames:
         | 'id'
+    }
+    'src/pages/tournaments/create.vue': {
+      routes:
+        | '/tournaments/create'
+      views:
+        | never
+      pathParamNames:
+        | never
     }
   }
 
