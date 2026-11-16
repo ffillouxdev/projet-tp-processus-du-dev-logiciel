@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import { $fetch } from 'ofetch'
+import { $fetch, type FetchOptions } from 'ofetch'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 const AUTH_STORAGE_KEY = 'tournament-auth'
@@ -126,6 +126,8 @@ async function login(data: LoginRequest): Promise<AuthResponse> {
   return response
 }
 
+let refreshPromise: Promise<TokenResponse> | null = null
+
 async function refreshToken(
   refreshTokenValue = tokens.value?.refresh_token,
 ): Promise<TokenResponse> {
@@ -133,15 +135,25 @@ async function refreshToken(
     throw new Error('Aucun refresh token disponible.')
   }
 
-  const response = await api<TokenResponse>('/auth/refresh', {
+  if (refreshPromise) {
+    return refreshPromise
+  }
+
+  refreshPromise = api<TokenResponse>('/auth/refresh', {
     method: 'POST',
     body: {
       refresh_token: refreshTokenValue,
     },
   })
+    .then((response) => {
+      updateTokens(response)
+      return response
+    })
+    .finally(() => {
+      refreshPromise = null
+    })
 
-  updateTokens(response)
-  return response
+  return refreshPromise
 }
 
 async function logout(): Promise<MessageResponse | undefined> {
@@ -164,15 +176,66 @@ async function logout(): Promise<MessageResponse | undefined> {
   }
 }
 
+async function fetchWithAuth<T>(
+  url: string,
+  options?: FetchOptions<'json'>,
+): Promise<T> {
+  const token = tokens.value?.access_token
+  if (!token) {
+    throw new Error('Vous devez être connecté.')
+  }
+
+  const headers = {
+    ...(options?.headers as Record<string, string>),
+    Authorization: `Bearer ${token}`,
+  }
+
+  try {
+    return await api<T>(url, {
+      ...options,
+      headers,
+    })
+  } catch (error) {
+    const is401 =
+      typeof error === 'object' &&
+      error !== null &&
+      'status' in error &&
+      error.status === 401
+
+    if (is401 && tokens.value?.refresh_token) {
+      try {
+        const nextTokens = await refreshToken()
+        return await api<T>(url, {
+          ...options,
+          headers: {
+            ...(options?.headers as Record<string, string>),
+            Authorization: `Bearer ${nextTokens.access_token}`,
+          },
+        })
+      } catch {
+        clearAuth()
+        throw new Error('Votre session a expiré. Veuillez vous reconnecter.')
+      }
+    }
+
+    if (is401) {
+      clearAuth()
+      throw new Error('Votre session a expiré. Veuillez vous reconnecter.')
+    }
+
+    throw error
+  }
+}
+
 async function fetchMyMemberships(): Promise<UserMembership[]> {
   const token = tokens.value?.access_token
   if (!token) return []
 
-  return api<UserMembership[]>('/auth/me/memberships', {
-    headers: {
-      Authorization: 'Bearer ' + token,
-    },
-  })
+  try {
+    return await fetchWithAuth<UserMembership[]>('/auth/me/memberships')
+  } catch {
+    return []
+  }
 }
 
 export function useAuth() {
@@ -185,6 +248,7 @@ export function useAuth() {
     login,
     refreshToken,
     logout,
+    fetchWithAuth,
     fetchMyMemberships,
   }
 }
