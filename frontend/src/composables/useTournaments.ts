@@ -1,4 +1,3 @@
-import { $fetch } from 'ofetch'
 import { useAuth } from './useAuth'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
@@ -94,10 +93,6 @@ export interface TournamentCreateInput {
   association_id: number
 }
 
-const api = $fetch.create({
-  baseURL: API_BASE_URL,
-})
-
 export function getTournamentWebSocketUrl(id: number): string {
   const wsBaseUrl = API_BASE_URL.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:')
   return `${wsBaseUrl}/tournaments/${id}/ws`
@@ -123,80 +118,35 @@ export function connectTournamentWebSocket(
 }
 
 export function useTournaments() {
-  const { accessToken } = useAuth()
+  const { fetchWithAuth } = useAuth()
 
   async function fetchVisibleTournaments(): Promise<Tournament[]> {
-    if (!accessToken.value) {
-      throw new Error('Vous devez être connecté pour consulter vos tournois.')
-    }
-
-    return api<Tournament[]>('/tournaments', {
-      headers: {
-        Authorization: 'Bearer ' + accessToken.value,
-      },
-    })
+    return fetchWithAuth<Tournament[]>('/tournaments')
   }
 
   async function fetchTournament(id: number): Promise<TournamentDetail> {
-    if (!accessToken.value) {
-      throw new Error('Vous devez être connecté pour consulter ce tournoi.')
-    }
-
-    return api<TournamentDetail>(`/tournaments/${id}`, {
-      headers: {
-        Authorization: 'Bearer ' + accessToken.value,
-      },
-    })
+    return fetchWithAuth<TournamentDetail>(`/tournaments/${id}`)
   }
 
   async function fetchTournamentBracket(id: number): Promise<TournamentBracketMatch[]> {
-    if (!accessToken.value) {
-      throw new Error('Vous devez être connecté pour consulter le bracket de ce tournoi.')
-    }
-
-    return api<TournamentBracketMatch[]>(`/tournaments/${id}/bracket`, {
-      headers: {
-        Authorization: 'Bearer ' + accessToken.value,
-      },
-    })
+    return fetchWithAuth<TournamentBracketMatch[]>(`/tournaments/${id}/bracket`)
   }
 
   async function joinTournament(id: number): Promise<TournamentParticipant> {
-    if (!accessToken.value) {
-      throw new Error('Vous devez être connecté pour rejoindre ce tournoi.')
-    }
-
-    return api<TournamentParticipant>(`/tournaments/${id}/participants`, {
+    return fetchWithAuth<TournamentParticipant>(`/tournaments/${id}/participants`, {
       method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + accessToken.value,
-      },
     })
   }
 
   async function leaveTournament(id: number): Promise<void> {
-    if (!accessToken.value) {
-      throw new Error('Vous devez être connecté pour quitter ce tournoi.')
-    }
-
-    await api(`/tournaments/${id}/participants/me`, {
+    await fetchWithAuth(`/tournaments/${id}/participants/me`, {
       method: 'DELETE',
-      headers: {
-        Authorization: 'Bearer ' + accessToken.value,
-      },
     })
   }
 
   async function startTournament(id: number): Promise<TournamentStartResponse> {
-    if (!accessToken.value) {
-      throw new Error('Vous devez être connecté pour lancer ce tournoi.')
-    }
-
-    return api<TournamentStartResponse>(`/tournaments/${id}/start`, {
+    return fetchWithAuth<TournamentStartResponse>(`/tournaments/${id}/start`, {
       method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + accessToken.value,
-      },
     })
   }
 
@@ -206,17 +156,10 @@ export function useTournaments() {
     scorePlayer1: number,
     scorePlayer2: number,
   ): Promise<{ message: string }> {
-    if (!accessToken.value) {
-      throw new Error('Vous devez être connecté pour enregistrer un score.')
-    }
-
-    return api<{ message: string }>(
+    return fetchWithAuth<{ message: string }>(
       `/tournaments/${tournamentId}/matches/${matchId}/score`,
       {
         method: 'PATCH',
-        headers: {
-          Authorization: 'Bearer ' + accessToken.value,
-        },
         body: {
           score_player1: scorePlayer1,
           score_player2: scorePlayer2,
@@ -230,44 +173,22 @@ export function useTournaments() {
     matchId: number,
     forfeitingUserId?: number,
   ): Promise<{ message: string }> {
-    if (!accessToken.value) {
-      throw new Error('Vous devez être connecté pour déclarer un forfait.')
-    }
-
-    return api<{ message: string }>(
+    return fetchWithAuth<{ message: string }>(
       `/tournaments/${tournamentId}/matches/${matchId}/forfeit`,
       {
         method: 'POST',
-        headers: {
-          Authorization: 'Bearer ' + accessToken.value,
-        },
         body: forfeitingUserId ? { forfeiting_user_id: forfeitingUserId } : {},
       },
     )
   }
 
   async function fetchAssociations(): Promise<AssociationSummary[]> {
-    if (!accessToken.value) {
-      throw new Error('Vous devez être connecté pour consulter les associations.')
-    }
-
-    return api<AssociationSummary[]>('/associations', {
-      headers: {
-        Authorization: 'Bearer ' + accessToken.value,
-      },
-    })
+    return fetchWithAuth<AssociationSummary[]>('/associations')
   }
 
   async function createTournament(input: TournamentCreateInput): Promise<Tournament> {
-    if (!accessToken.value) {
-      throw new Error('Vous devez être connecté pour créer un tournoi.')
-    }
-
-    return api<Tournament>('/tournaments', {
+    return fetchWithAuth<Tournament>('/tournaments', {
       method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + accessToken.value,
-      },
       body: input,
     })
   }

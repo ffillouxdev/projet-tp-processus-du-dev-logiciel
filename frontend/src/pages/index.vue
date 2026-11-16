@@ -123,7 +123,21 @@ async function handleLogout(): Promise<void> {
             </RouterLink>
           </div>
         </div>
-        <p v-else-if="loadError" role="alert" class="text-danger">{{ loadError }}</p>
+        <div
+          v-else-if="loadError"
+          role="alert"
+          class="rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-900/50 dark:bg-red-950/20"
+        >
+          <p class="text-sm font-semibold text-danger">{{ loadError }}</p>
+          <div class="mt-4">
+            <RouterLink
+              to="/login"
+              class="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primary-hover"
+            >
+              Se reconnecter
+            </RouterLink>
+          </div>
+        </div>
         <TournamentList v-else :tournaments="tournaments" />
       </section>
     </div>

@@ -6,11 +6,17 @@ import type {
   SingleEliminationMatches,
 } from './single-elimination.types'
 
-const props = defineProps<{
-  matches: SingleEliminationMatches
-  title?: string
-  embedded?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    matches: SingleEliminationMatches
+    title?: string
+    embedded?: boolean
+    isMatchInteractive?: (matchId: string | number) => boolean
+  }>(),
+  {
+    isMatchInteractive: () => false,
+  },
+)
 
 const emit = defineEmits<{
   (e: 'selectMatch', matchId: string | number): void
@@ -58,6 +64,7 @@ const rounds = computed(() => {
               v-for="match in round.matches"
               :key="match.id"
               :players="match.players"
+              :interactive="isMatchInteractive(match.id)"
               @click="emit('selectMatch', match.id)"
             />
           </div>

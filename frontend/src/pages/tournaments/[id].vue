@@ -10,10 +10,11 @@ import {
   type TournamentStatus,
   type TournamentParticipant,
   type TournamentBracketMatch,
+  type UserMembership,
 } from '@/composables'
 
 const route = useRoute('/tournaments/[id]')
-const { user } = useAuth()
+const { user, fetchMyMemberships } = useAuth()
 const { success: toastSuccess, error: toastError } = useToast()
 const {
   fetchTournament,
@@ -32,6 +33,7 @@ const [tournamentResponse, bracketResponse] = await Promise.all([
 ])
 const tournament = ref(tournamentResponse)
 const bracket = ref(bracketResponse)
+const userMemberships = ref<UserMembership[]>([])
 const isJoining = ref(false)
 const isLeaving = ref(false)
 const isStarting = ref(false)
@@ -52,9 +54,28 @@ const isRegistered = computed(() =>
   tournament.value.participants.some((participant) => participant.user_id === user.value?.id),
 )
 
+const isOrganizer = computed(() => {
+  if (!user.value) return false
+  if (user.value.is_superuser) return true
+  const assocId = tournament.value.association_id ?? tournament.value.association?.id
+  return userMemberships.value.some(
+    (m) =>
+      m.association_id === assocId &&
+      ['admin', 'organizer'].includes(m.role?.name?.toLowerCase() ?? ''),
+  )
+})
+
 let socket: WebSocket | null = null
 
-onMounted(() => {
+onMounted(async () => {
+  if (user.value) {
+    try {
+      userMemberships.value = await fetchMyMemberships()
+    } catch {
+      userMemberships.value = []
+    }
+  }
+
   socket = connectTournamentWebSocket(tournamentId, (data) => {
     if (data.bracket) {
       bracket.value = data.bracket
@@ -155,10 +176,31 @@ async function handleStart(): Promise<void> {
   }
 }
 
+function canInteractWithMatch(match: TournamentBracketMatch): boolean {
+  if (!user.value) return false
+  if (tournament.value.status !== 'ongoing') return false
+  if (match.winner_id !== null || match.status !== 'pending') {
+    return false
+  }
+
+  const [p1, p2] = match.players
+  if (!p1.id || !p2.id) return false
+  if (
+    p1.name === 'En attente' ||
+    p2.name === 'En attente' ||
+    p1.name === 'BYE' ||
+    p2.name === 'BYE'
+  ) {
+    return false
+  }
+
+  const isMatchParticipant = user.value.id === p1.id || user.value.id === p2.id
+  return isMatchParticipant || isOrganizer.value
+}
+
 function handleSelectMatch(match: TournamentBracketMatch): void {
-  // Only allow scoring if both players are present
-  if (!match.players[0].name || !match.players[1].name) return
-  if (match.players[0].name === 'En attente' || match.players[1].name === 'En attente') return
+  // Prevent any unauthorized interaction
+  if (!canInteractWithMatch(match)) return
 
   selectedMatch.value = match
   scorePlayer1.value = match.players[0].score ?? 0
@@ -169,6 +211,7 @@ function handleSelectMatch(match: TournamentBracketMatch): void {
 
 async function handleReportScore(): Promise<void> {
   if (!selectedMatch.value) return
+  if (!canInteractWithMatch(selectedMatch.value)) return
   if (scorePlayer1.value === '' || scorePlayer2.value === '') {
     scoreError.value = 'Veuillez saisir un score pour chaque joueur.'
     toastError(scoreError.value)
@@ -210,15 +253,12 @@ async function handleReportScore(): Promise<void> {
 
 const canDeclareForfeit = computed(() => {
   if (!selectedMatch.value) return false
-  if (tournament.value.status !== 'ongoing') return false
-  if (selectedMatch.value.winner_id !== null || selectedMatch.value.status !== 'pending') {
-    return false
-  }
-  const [p1, p2] = selectedMatch.value.players
-  if (!p1.id || !p2.id) return false
-  if (user.value?.is_superuser) return true
-  return user.value?.id === p1.id || user.value?.id === p2.id
+  return canInteractWithMatch(selectedMatch.value)
 })
+
+const hasInteractiveMatches = computed(() =>
+  bracket.value.some((m) => canInteractWithMatch(m)),
+)
 
 function handleOpenForfeitDialog(): void {
   if (!selectedMatch.value) return
@@ -321,7 +361,7 @@ function formatDate(date: string | null): string | null {
             {{ registrationError }}
           </p>
         </div>
-        <div v-if="user?.is_superuser && ['draft', 'open'].includes(tournament.status)" class="mt-6">
+        <div v-if="isOrganizer && ['draft', 'open'].includes(tournament.status)" class="mt-6">
           <UIButton variant="primary" @click="isStartDialogOpen = true">
             Lancer le tournoi
           </UIButton>
@@ -406,7 +446,7 @@ function formatDate(date: string | null): string | null {
         description="Cette action est irréversible. L'adversaire sera automatiquement déclaré vainqueur (3-0) et qualifié pour le tour suivant."
       >
         <div v-if="selectedMatch" class="space-y-4">
-          <div v-if="user?.is_superuser" class="space-y-3">
+          <div v-if="isOrganizer" class="space-y-3">
             <label class="block text-sm font-semibold text-slate-800 dark:text-gray-200">
               Sélectionnez le participant déclarant forfait (ou absent) :
             </label>
@@ -447,9 +487,13 @@ function formatDate(date: string | null): string | null {
       <div class="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <section class="rounded-2xl border border-dialog-border bg-dialog-bg p-6 shadow-sm" aria-labelledby="bracket-title">
           <h2 id="bracket-title" class="mb-5 text-2xl font-black text-slate-900">Bracket</h2>
-          <TournamentBracket :matches="bracket" @select-match="handleSelectMatch" />
-          <p v-if="bracket.length" class="mt-3 text-xs text-dialog-muted">
-            Cliquez sur un match pour saisir ou mettre à jour les scores.
+          <TournamentBracket
+            :matches="bracket"
+            :is-match-interactive="canInteractWithMatch"
+            @select-match="handleSelectMatch"
+          />
+          <p v-if="hasInteractiveMatches" class="mt-3 text-xs font-semibold text-primary">
+            Cliquez sur votre match en cours pour saisir les scores ou déclarer forfait.
           </p>
         </section>
 
